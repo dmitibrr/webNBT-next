@@ -6,11 +6,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-echo "▶ building dist/…"
-node tools/build.js
-
 ORIGIN=$(git remote get-url origin)
 BRANCH=gh-pages
+
+# build first — tools/ exists only on master
+echo "▶ building dist/…"
+node tools/build.js
 
 # stash any uncommitted source changes so the branch switch is clean
 git stash --include-untracked --keep-index 2>/dev/null || true
@@ -21,12 +22,12 @@ if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
 else
   echo "▶ creating $BRANCH branch…"
   git checkout --orphan "$BRANCH"
-  git rm -rfq . 2>/dev/null || true
 fi
 
-# replace tracked files with the fresh build (untracked dist/ from master persists)
-git rm -rq --cached . 2>/dev/null || true
-rm -rf ./* 2>/dev/null || true
+# drop tracked files only — untracked dist/ survives the switch
+git rm -rfq . 2>/dev/null || true
+
+# replace root contents with the fresh build
 cp -r dist/. .
 
 git add -A

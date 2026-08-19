@@ -1,125 +1,92 @@
-<?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
-  <head>
-    <title>NBT Editor</title>
-    
-    <script type="text/javascript" src="src/TagLibrary.js"></script>
-    <script type="text/javascript" src="src/HighlightedString.js"></script>
-    <script type="text/javascript" src="src/App.js"></script>
-    
-    <link rel="stylesheet" href="style/app.css" />
-    
-    <link rel="stylesheet" href="lib/jstree/dist/themes/default/style.min.css" />
-    <script src="https://code.jquery.com/jquery-2.1.3.min.js"></script>
-    <script src="lib/jstree/dist/jstree.min.js"></script>
-    
-    <script type="text/javascript" src="lib/FileSaver.min.js"></script>
-    
-    <script type="text/javascript">
-    //<![CDATA[
-      
-      var testInterval; // Hard to tell when Emscripten will be ready.
-      function testEmscripten() {
-        if(Module.Tag === undefined) return;
-        clearInterval(testInterval);
-        
-        Module.TOTAL_MEMORY = 64 * 1024 * 1024;
-        Dependencies.handleLoaded(DEP_EMSCRIPTEN);
-      }
-      
-      var Module = { preRun:[] };
-      Module['preRun'].push(function() {
-        testInterval = setInterval(testEmscripten, 50);
-      });
-      
-      window.addEventListener('load', function() {
-        Dependencies.handleLoaded(DEP_WINDOW);
-      });
-      
-    //]]>
-    </script>
-    <script type="text/javascript" src="NBT.js"></script>
-  </head>
-  <body>
-    <div id="drop_zone">
-      <span>
-        Drop file here<br />
-        or select file<br />
-        <input id="file_input" type="file" /><br>
-      </span>
-      <div id="contact" style="font-size:12px;position:fixed;bottom:10px;right:20px;opacity:0.8;">
-        Feedback? <a href="http://irath96.github.io/contact/">Contact me</a>
-      </div>
-    </div>
-    <script>
-      
-      function handleFileSelect(evt) {
-        evt.stopPropagation();
-        evt.preventDefault();
-        
-        var files = evt.dataTransfer.files; // FileList object.
-        for (var i = 0, f; f = files[i]; ++i) {
-          var reader = new FileReader();
-          
-          // Closure to capture the file information.
-          reader.onload = (function(file) {
-            lastFilename = file.name;
-            return function(e) {
-              loadData(e.target.result);
-            };
-          })(f);
-          
-          reader.readAsArrayBuffer(f);
-        }
-          
-        document.querySelector('#drop_zone').style.display = 'none';
-      }
-      
-      function handleDragOver(evt) {
-        evt.stopPropagation();
-        evt.preventDefault();
-        evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
-      }
-      
-      // Setup the dnd listeners.
-      document.getElementById('file_input').onchange = function() {
-        var files = document.getElementById('file_input').files; // FileList object.
-        for (var i = 0, f; f = files[i]; ++i) {
-          var reader = new FileReader();
-          
-          // Closure to capture the file information.
-          reader.onload = (function(file) {
-            lastFilename = file.name;
-            return function(e) {
-              loadData(e.target.result);
-            };
-          })(f);
-          
-          reader.readAsArrayBuffer(f);
-        }
-          
-        document.querySelector('#drop_zone').style.display = 'none';
-      };
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>webNBT · NBT editor</title>
 
-      var dropZone = document.getElementById('drop_zone');
-      dropZone.addEventListener('dragover', handleDragOver, false);
-      dropZone.addEventListener('drop', handleFileSelect, false);
-      
-    </script>
-    <div id="topbar">
-      <div id="buttons">
-        <input id="open_btn" type="button" value="Open" onclick="javascript:location.href = location.href;" />
-        <input id="save_btn" type="button" value="Save" onclick="javascript:App.save();" />
-        <input id="toggle_hexview_btn" type="button" value="&gt;" onclick="javascript:App.toggleHexview(this);" />
-      </div>
-      <div id="search_bar">
-        <input type="text" id="search_field" placeholder="Search..." />
-      </div>
+  <link rel="stylesheet" href="style/app.css" />
+
+  <!-- Core logic (order matters: model → codec → format → region → mcdata) -->
+  <script src="src/model.js"></script>
+  <script src="src/codec.js"></script>
+  <script src="src/format.js"></script>
+  <script src="src/region.js"></script>
+  <script src="src/mcdata.js"></script>
+  <script src="src/treeview.js"></script>
+  <script src="src/inspector.js"></script>
+  <script src="src/app.js"></script>
+</head>
+<body>
+  <div id="drop-zone">
+    <div class="dz-box">
+      <div class="dz-title">Drop a file here</div>
+      <div class="dz-sub">.dat &middot; .schematic &middot; .mcmeta &middot; .mca / .mcr (region) &middot; any NBT
+        (gzip, zlib, raw deflate or uncompressed)</div>
     </div>
-    <div id="screen">
-      <div id="tree"></div>
+  </div>
+
+  <div id="loading-shade">
+    <div class="load-box">
+      <div class="spinner"></div>
+      <div id="loading-text">Booting NBT codec…</div>
     </div>
-    <pre id="hexview">data</pre>
-  </body>
+  </div>
+
+  <header id="topbar">
+    <div id="brand" title="webNBT — NBT editor">▣ webNBT</div>
+    <div id="toolbar">
+      <button id="btn-open" title="Open file (Ctrl+O)">Open</button>
+      <button id="btn-save" title="Save file (Ctrl+S)">Save</button>
+      <button id="btn-export" title="Import / export as SNBT or JSON">⇅ Formats</button>
+
+      <span class="tb-sep"></span>
+
+      <button id="btn-undo" title="Undo (Ctrl+Z)" disabled>↶</button>
+      <button id="btn-redo" title="Redo (Ctrl+Y)" disabled>↷</button>
+
+      <span class="tb-sep"></span>
+
+      <button id="btn-add" title="Add tag">＋</button>
+      <button id="btn-duplicate" title="Duplicate" disabled>⧉</button>
+      <button id="btn-delete" title="Delete tag (Del)" disabled>🗑</button>
+
+      <span class="tb-sep"></span>
+
+      <button id="btn-hex" title="Toggle hex view" class="active"># Hex</button>
+      <button id="btn-smart" title="Smart views for structures/inventories" class="active">✲ Smart</button>
+      <button id="btn-theme" title="Toggle theme">🌓</button>
+    </div>
+    <div id="search-wrap">
+      <input id="search-field" type="search" placeholder="Search tags… (Enter next)" autocomplete="off" />
+    </div>
+  </header>
+
+  <main id="layout">
+    <section id="tree-pane">
+      <div id="tree" tabindex="0"></div>
+      <div id="empty-state">
+        <div class="es-big">No file loaded</div>
+        <div class="es-sub">Click <b>Open</b>, drop a file anywhere, or <button id="empty-open">browse…</button></div>
+      </div>
+    </section>
+
+    <section id="right-pane">
+      <div id="inspector">
+        <div class="panel-empty">Select a tag to inspect &amp; edit it.</div>
+      </div>
+      <div id="hexview" class="hidden"></div>
+    </section>
+  </main>
+
+  <footer id="statusbar">
+    <span id="st-file">—</span>
+    <span id="st-mode"></span>
+    <span id="st-count"></span>
+    <span id="st-errors"></span>
+    <span id="st-history"></span>
+  </footer>
+
+  <input type="file" id="file-input" multiple hidden />
+</body>
 </html>

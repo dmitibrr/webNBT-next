@@ -1,0 +1,12 @@
+{
+  "name": "webnbt-next",
+  "version": "1.0.0",
+  "description": "An HTML5 NBT editor built on WebAssembly (fork of iRath96/webNBT)",
+  "private": true,
+  "scripts": {
+    "build:wasm": "make build",
+    "build": "node tools/build.js",
+    "deploy": "bash tools/deploy.sh"
+  },
+  "license": "MIT"
+}

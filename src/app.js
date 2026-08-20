@@ -13,6 +13,7 @@ window.App = (function (ns) {
     hist: [], future: [],
     clipboard: null,
     selectedPath: null,
+    openChunks: [],          // chunk docs opened from a region: { doc, x, z }
     hexOn: true, smartOn: true, theme: 'dark',
     inspector: null, tree: null,
   };
@@ -31,7 +32,7 @@ window.App = (function (ns) {
       },
       shade: $('#loading-shade'), loading: $('#loading-text'),
       empty: $('#empty-state'), file: $('#file-input'), drop: $('#drop-zone'),
-      search: $('#search-field'),
+      search: $('#search-field'), tabs: $('#chunk-tabs'), fileCompare: $('#file-compare'),
     };
   }
 
@@ -69,11 +70,15 @@ window.App = (function (ns) {
       onSelect: (path) => {
         A.selectedPath = path;
         renderInspector();
+        if (A.hexOn && A.hexBytes) renderHex();
       },
       onCommit: (tag) => { commitEdit(); },
       onRename: (tag, path, newName) => { commitRename(tag, path, newName); },
       onMove: (info) => { moveTag(info); },
       onContextMenu: (path, x, y) => { showContextMenu(path, x, y); },
+      onExternalDrop: (tag, destPath, destIsContainer) => {
+        insertExternalTag(tag, destPath, destIsContainer);
+      },
     });
     renderInspector();
   }
@@ -316,6 +321,36 @@ window.App = (function (ns) {
     return isCompound(container) ? container.v[i] && container.v[i][0] : String(i);
   }
 
+  // Cross-window tag drop: no doc → open as new; else insert into the drop target.
+  function insertExternalTag(tag, destPath, destIsContainer) {
+    if (!A.doc || A.doc.kind === 'region') {
+      A.doc = { kind: 'nbt', filename: 'dropped.dat', model: clone(tag), mode: 'gzip' };
+      A.hist = []; A.future = [];
+      A.selectedPath = null;
+      refs.empty.classList.add('hidden');
+      A.refreshStatus();
+      refreshAll();
+      return;
+    }
+    pushHistory();
+    const copy = clone(tag);
+    const target = destPath && destPath.length ? ns.getByPath(A.doc.model, destPath) : A.doc.model;
+    const container = (target && (isCompound(target) || isList(target))) ? target : parentOf(destPath);
+    if (!container) { A.refreshAll(); return; }
+    let sel;
+    if (isCompound(container)) {
+      const name = nextFreeKey(container, copy.n || 'new_tag');
+      container.v.push([name, copy]);
+      copy.n = name;
+      sel = destPath.concat([name]);
+    } else if (isList(container)) {
+      container.v.push(copy);
+      sel = destPath.concat([String(container.v.length - 1)]);
+    }
+    A.refreshAll();
+    if (sel) { A.selectedPath = sel; A.tree.select(sel, true); }
+  }
+
   // ── menus ───────────────────────────────────────────────────────────────────
 
   function showContextMenu(path, x, y) {
@@ -449,6 +484,8 @@ window.App = (function (ns) {
     if (ns.region.probe(buf) || /\.(mca|mcr)$/i.test(file.name)) {
       A.region = { container: ns.region.create(buf), filename: file.name };
       A.doc = { kind: 'region', filename: file.name };
+      A.openChunks = [];
+      renderChunkTabs();
       refs.empty.classList.add('hidden');
       A.refreshStatus();
       refreshAll();
@@ -467,6 +504,7 @@ window.App = (function (ns) {
     refs.empty.classList.add('hidden');
     A.refreshStatus();
     refreshAll();
+    addRecent(file.name);
     if ((loaded.res.errors || []).length) {
       toast(t('warn.parseIssues', loaded.res.errors.length), 'warn');
     }
@@ -488,9 +526,125 @@ window.App = (function (ns) {
       toast(t('toast.stagedChunk', A.doc.x, A.doc.z), 'warn');
       return;
     }
+    const issues = ns.mcdata.validateChunk(A.doc.model);
+    if (issues.length) {
+      toast(t('warn.chunkIssues', issues.length) + ' — ' + issues[0], 'warn');
+    }
     const bytes = await ns.codec.compileModel(A.doc.model, A.doc.mode || 'gzip');
     ns.codec.download(bytes, A.doc.filename);
     toast(t('toast.saved', A.doc.filename));
+  }
+
+  function openChunkDoc(model, x, z) {
+    const doc = { kind: 'chunk', filename: x + '.' + z + '.nbt', model, mode: 'zlib', region: A.region ? A.region.container : null, x, z };
+    // register tab (dedupe by x,z)
+    const existing = A.openChunks.findIndex((c) => c.x === x && c.z === z);
+    const entry = { x, z, doc };
+    if (existing >= 0) A.openChunks[existing] = entry;
+    else A.openChunks.push(entry);
+    switchChunk(entry);
+  }
+
+  function switchChunk(entry) {
+    A.doc = entry.doc;
+    A.hist = []; A.future = [];
+    A.selectedPath = null;
+    refs.tree.classList.remove('hidden');
+    A.refreshStatus();
+    refreshAll();
+    renderChunkTabs();
+  }
+
+  function renderChunkTabs() {
+    const t = refs.tabs;
+    if (!t) return;
+    t.textContent = '';
+    if (!A.openChunks.length) { t.classList.add('hidden'); return; }
+    t.classList.remove('hidden');
+    for (let i = 0; i < A.openChunks.length; i++) {
+      const c = A.openChunks[i];
+      const tab = el2('button');
+      tab.className = 'chunk-tab' + (A.doc && A.doc.x === c.x && A.doc.z === c.z ? ' active' : '');
+      tab.textContent = 'r.' + c.x + '.' + c.z + ' · ' + (i + 1);
+      tab.title = 'Alt+' + (i + 1);
+      tab.onclick = () => switchChunk(c);
+      t.appendChild(tab);
+    }
+  }
+
+  // ── recent files (menu) ─────────────────────────────────────────────────────
+
+  const RECENT_KEY = 'webnbt-recent';
+  function addRecent(name) {
+    try {
+      const arr = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+      const next = [name, ...arr.filter((n) => n !== name)].slice(0, 8);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+    } catch (e) { /* ignore */ }
+  }
+  function recentList() {
+    try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch (e) { return []; }
+  }
+
+  // ── compare / diff ──────────────────────────────────────────────────────────
+
+  async function compareFile(file) {
+    if (!A.doc || A.doc.kind === 'region') { toast(t('err.parse'), 'err'); return; }
+    const buf = new Uint8Array(await file.arrayBuffer());
+    const loaded = await ns.codec.loadBuffer(buf);
+    if (!loaded.decoded) { toast(t('err.parse'), 'err'); return; }
+    const other = loaded.res.root;
+    const diffs = ns.diff(A.doc.model, other);
+    const changes = diffs.filter((d) => d.kind !== 'same');
+    if (changes.length === 0) { toast(t('compare.identical')); return; }
+    A.diffResults = changes;
+    A.diffFilename = file.name;
+    renderDiffPanel();
+    toast(tpl('compare.changes', changes.length));
+  }
+
+  function renderDiffPanel() {
+    if (!A.diffResults) return;
+    const box = el2('div');
+    box.className = 'diff-panel';
+    const head = el2('div');
+    head.className = 'diff-head';
+    head.textContent = t('compare.title', A.diffFilename || '');
+    box.appendChild(head);
+    const list = el2('div');
+    list.className = 'diff-list';
+    for (const d of A.diffResults) {
+      const row = el2('button');
+      row.className = 'diff-row ' + d.kind;
+      const label = el2('span');
+      label.className = 'diff-path';
+      label.textContent = '/' + d.path.map((s) => String(s)).join('/') || '(root)';
+      const badge = el2('span');
+      badge.className = 'diff-badge';
+      badge.textContent = d.kind;
+      row.appendChild(badge);
+      row.appendChild(label);
+      row.onclick = () => {
+        const p = d.path;
+        A.selectedPath = p;
+        if (A.tree) A.tree.select(p, true);
+        closeMenus();
+      };
+      list.appendChild(row);
+    }
+    const closeBtn = el2('button');
+    closeBtn.className = 'diff-close';
+    closeBtn.textContent = t('compare.close');
+    closeBtn.onclick = () => {
+      A.diffResults = null;
+      const p = refs.tree.parentElement.querySelector('.diff-panel');
+      if (p) p.remove();
+    };
+    box.appendChild(list);
+    box.appendChild(closeBtn);
+    const old = refs.tree.parentElement.querySelector('.diff-panel');
+    if (old) old.remove();
+    refs.tree.parentElement.appendChild(box);
   }
 
   // ── region grid ─────────────────────────────────────────────────────────────
@@ -519,12 +673,7 @@ window.App = (function (ns) {
       cell.onclick = async () => {
         const model = await c.chunkModel(chunk.x, chunk.z);
         if (!model) { toast(t('err.chunkUnreadable'), 'err'); return; }
-        A.doc = { kind: 'chunk', filename: chunk.x + '.' + chunk.z + '.nbt', model, mode: 'zlib', region: c, x: chunk.x, z: chunk.z };
-        A.hist = []; A.future = [];
-        A.selectedPath = null;
-        refs.tree.classList.remove('hidden');
-        A.refreshStatus();
-        refreshAll();
+        openChunkDoc(model, chunk.x, chunk.z);
       };
       grid.appendChild(cell);
     }
@@ -537,6 +686,8 @@ window.App = (function (ns) {
       if (A.doc.kind === 'chunk') {
         A.region.container.setChunkModel(A.doc.x, A.doc.z, A.doc.model, 2);
         A.doc = { kind: 'region', filename: A.region.filename };
+        A.openChunks = [];
+        renderChunkTabs();
         refreshAll();
         await new Promise((r) => setTimeout(r, 30));
       }
@@ -550,15 +701,78 @@ window.App = (function (ns) {
 
   // ── hex ─────────────────────────────────────────────────────────────────────
 
+  // Interactive hex view: rows clickable → select tag by byte offset; the
+  // currently selected tag's byte range is highlighted (mini-map overlay).
   function updateHex() {
     if (!A.hexOn) return;
-    if (!A.doc || A.doc.kind === 'region') { refs.hex.textContent = ''; return; }
+    if (!A.doc || A.doc.kind === 'region') { refs.hex.textContent = ''; A.hexBytes = null; A.hexRanges = null; return; }
     try {
-      const wasm = ns.codec._module;
-      const b64 = wasm.encode(A.doc.model);
-      const bytes = ns.codec.b64ToBytes(b64);
-      refs.hex.textContent = ns.hexRows(bytes, 16);
+      const enc = ns.codec.encodeWithOffsets(A.doc.model);
+      A.hexBytes = enc.bytes;
+      A.hexRanges = enc.ranges;
+      renderHex();
     } catch (e) { refs.hex.textContent = '…'; }
+  }
+
+  function renderHex() {
+    const bytes = A.hexBytes;
+    const ranges = A.hexRanges;
+    if (!bytes) { refs.hex.textContent = ''; return; }
+    const perRow = 16;
+    const hex = el2('div');
+    hex.className = 'hex-wrap';
+
+    // highlight range for the selected path (deepest)
+    let hl = null;
+    if (A.selectedPath && ranges) {
+      hl = ranges.get(A.selectedPath.join('\u001f')) || null;
+    }
+
+    for (let i = 0; i < bytes.length; i += perRow) {
+      const row = el2('div');
+      row.className = 'hex-row';
+      row.dataset.start = i;
+      row.dataset.end = Math.min(i + perRow, bytes.length);
+      const off = el2('span'); off.className = 'hex-off'; off.textContent = i.toString(16).padStart(6, '0');
+      row.appendChild(off);
+      const hb = el2('span'); hb.className = 'hex-bytes';
+      for (let j = i; j < i + perRow && j < bytes.length; j++) {
+        const b = el2('span'); b.className = 'hex-byte';
+        b.textContent = bytes[j].toString(16).padStart(2, '0');
+        if (hl && j >= hl[0] && j < hl[1]) b.classList.add('hl');
+        hb.appendChild(b);
+      }
+      row.appendChild(hb);
+      const ch = el2('span'); ch.className = 'hex-chars';
+      for (let j = i; j < i + perRow && j < bytes.length; j++) {
+        const c = el2('span'); c.className = 'hex-char';
+        c.textContent = (bytes[j] >= 32 && bytes[j] < 127) ? String.fromCharCode(bytes[j]) : '.';
+        if (hl && j >= hl[0] && j < hl[1]) c.classList.add('hl');
+        ch.appendChild(c);
+      }
+      row.appendChild(ch);
+      row.addEventListener('click', () => onHexClick(Number(row.dataset.start)));
+      hex.appendChild(row);
+    }
+    if (bytes.length === 0) hex.textContent = t('hex.empty');
+    refs.hex.textContent = '';
+    refs.hex.appendChild(hex);
+  }
+
+  // Find the deepest tag range containing `offset`; select it in the tree.
+  function onHexClick(offset) {
+    if (!A.hexRanges || !A.doc) return;
+    let best = null, bestKey = null;
+    for (const [key, r] of A.hexRanges) {
+      if (offset >= r[0] && offset < r[1]) {
+        if (!best || (r[1] - r[0]) < (best[1] - best[0])) { best = r; bestKey = key; }
+      }
+    }
+    if (bestKey === null) return;
+    const path = bestKey === '' ? [] : bestKey.split('\u001f');
+    A.selectedPath = path;
+    if (A.tree) A.tree.select(path, true);
+    renderHex();
   }
 
   // ── status / buttons ────────────────────────────────────────────────────────
@@ -612,6 +826,45 @@ window.App = (function (ns) {
     ns.codec.download(new TextEncoder().encode(text), A.doc.filename.replace(/\.[^.]+$/, '') + '.json', 'application/json');
   }
 
+  // ── export base64 / python ──────────────────────────────────────────────────
+
+  async function exportCurrentBase64() {
+    if (!A.doc || A.doc.kind === 'region') return;
+    try {
+      const raw = await ns.codec.compileModel(A.doc.model, 'none');
+      const text = ns.codec.bytesToB64(raw);
+      ns.codec.download(new TextEncoder().encode(text), A.doc.filename.replace(/\.[^.]+$/, '') + '.b64', 'text/plain');
+    } catch (e) { toast(t('err.importFailed', String(e)), 'err'); }
+  }
+
+  async function copyPython() {
+    if (!A.doc || A.doc.kind === 'region') return;
+    try {
+      const raw = await ns.codec.compileModel(A.doc.model, 'none');
+      const b64 = ns.codec.bytesToB64(raw);
+      const py = [
+        '# Generated by webNBT',
+        'import base64',
+        'import nbtlib',
+        'raw = base64.b64decode("' + b64 + '")',
+        'root = nbtlib.File.parse_nbt(raw)',
+        '',
+      ].join('\n');
+      await navigator.clipboard.writeText(py);
+      toast('Python');
+    } catch (e) { toast(t('err.importFailed', String(e)), 'err'); }
+  }
+
+  async function copyB64SNBT() {
+    if (!A.doc || A.doc.kind === 'region') return;
+    try {
+      const text = ns.toSNBT(A.doc.model, {});
+      const b64 = btoa(unescape(encodeURIComponent(text)));
+      await navigator.clipboard.writeText(b64);
+      toast('SNBT·b64');
+    } catch (e) { toast(t('err.importFailed', String(e)), 'err'); }
+  }
+
   async function importText(file) {
     const text = await file.text();
     try {
@@ -644,9 +897,22 @@ window.App = (function (ns) {
     const items = [
       { label: t('formats.exportSNBT'), action: exportCurrentSNBT },
       { label: t('formats.exportJSON'), action: exportCurrentJSON },
+      { label: t('formats.exportBase64'), action: exportCurrentBase64 },
       { sep: true },
+      { label: t('formats.copyPython'), action: copyPython },
+      { label: t('formats.exportB64SNBT'), action: copyB64SNBT },
+      { sep: true },
+      { label: t('formats.compare'), action: () => refs.fileCompare.click() },
       { label: t('formats.import'), action: () => refs.file.click() },
     ];
+    const recents = recentList();
+    if (recents.length) {
+      items.push({
+        label: t('formats.recent'), submenu: [
+          recents.map((name) => ({ label: name, action: () => { toast(name); } })),
+        ],
+      });
+    }
     showMenu(x, y, items);
   }
 
@@ -697,6 +963,11 @@ window.App = (function (ns) {
       A.theme = A.theme === 'dark' ? 'light' : 'dark';
       applyTheme();
     };
+    $('#btn-types').onclick = (e) => {
+      const on = !ns.I18N.localizeTypes;
+      ns.I18N.setLocalizeTypes(on);
+      e.target.classList.toggle('active', on);
+    };
     $('#btn-export').onclick = (e) => {
       const r = e.target.getBoundingClientRect();
       showFormatsMenu(r.left, r.bottom);
@@ -705,6 +976,12 @@ window.App = (function (ns) {
     refs.file.addEventListener('change', (e) => {
       for (const f of e.target.files) openFile(f);
       refs.file.value = '';
+    });
+
+    refs.fileCompare.addEventListener('change', (e) => {
+      const f = e.target.files[0];
+      if (f) compareFile(f);
+      refs.fileCompare.value = '';
     });
 
     // drag & drop
@@ -746,6 +1023,11 @@ window.App = (function (ns) {
       else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
       else if (mod && e.key.toLowerCase() === 'c') { const t = currentTag(); if (t) copyTag(t); }
       else if (mod && e.key.toLowerCase() === 'v') { if (A.selectedPath) pasteAfter(A.selectedPath); }
+      else if (e.altKey && /^[1-9]$/.test(e.key) && A.openChunks.length) {
+        e.preventDefault();
+        const i = Number(e.key) - 1;
+        if (A.openChunks[i]) switchChunk(A.openChunks[i]);
+      }
       else if (e.key === 'Delete' || e.key === 'Backspace') { if (A.selectedPath && A.selectedPath.length) deleteTag(A.selectedPath); }
       else if (e.key === 'F2') { if (A.selectedPath) { const t = currentTag(); if (t) A.tree.beginNameEdit(A.selectedPath, t); } }
       else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -764,6 +1046,73 @@ window.App = (function (ns) {
     // theme init
     try { const saved = localStorage.getItem('webnbt-theme'); if (saved) A.theme = saved; } catch (e2) {}
     applyTheme();
+
+    window.addEventListener('beforeunload', saveSnapshot);
+    window.addEventListener('pagehide', saveSnapshot);
+  }
+
+  // ── session snapshot (beforeunload → restore) ───────────────────────────────
+
+  const SNAP_KEY = 'webnbt-session';
+
+  function saveSnapshot() {
+    try {
+      if (!A.doc || A.doc.kind === 'region') { localStorage.removeItem(SNAP_KEY); return; }
+      const snap = {
+        filename: A.doc.filename,
+        model: A.doc.model,
+        mode: A.doc.mode,
+        hist: A.hist,
+        future: A.future,
+        selected: A.selectedPath,
+        ts: Date.now(),
+      };
+      const s = JSON.stringify(snap, (k, v) => typeof v === 'bigint' ? v.toString() + 'n' : v);
+      if (s.length > 2 * 1024 * 1024) return; // skip oversized
+      localStorage.setItem(SNAP_KEY, s);
+    } catch (e) { /* ignore */ }
+  }
+
+  function restoreSnapshot() {
+    try {
+      const s = localStorage.getItem(SNAP_KEY);
+      if (!s) return false;
+      localStorage.removeItem(SNAP_KEY);
+      const snap = JSON.parse(s, (k, v) => typeof v === 'string' && /^-?\d+n$/.test(v) ? BigInt(v.slice(0, -1)) : v);
+      if (!snap || !snap.model) return false;
+      A.doc = { kind: 'nbt', filename: snap.filename || 'restored.dat', model: snap.model, mode: snap.mode || 'gzip' };
+      A.hist = snap.hist || []; A.future = snap.future || [];
+      A.selectedPath = snap.selected || null;
+      refs.empty.classList.add('hidden');
+      A.refreshStatus();
+      refreshAll();
+      toast('♻ ' + (snap.filename || 'Session'));
+      return true;
+    } catch (e) { /* ignore */ }
+  }
+
+  // ── URL file param (#file=...) ──────────────────────────────────────────────
+
+  async function loadFromUrl(url) {
+    let buf;
+    try {
+      if (url.startsWith('data:')) {
+        const res = await fetch(url);
+        buf = new Uint8Array(await res.arrayBuffer());
+      } else {
+        // same-origin (or CORS-enabled) fetch; fall back to window.open on failure
+        const res = await fetch(url, { mode: 'cors' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        buf = new Uint8Array(await res.arrayBuffer());
+      }
+    } catch (e) {
+      toast(t('err.parse'), 'err');
+      return;
+    }
+    const name = decodeURIComponent(url.split('/').pop().split('#')[0].split('?')[0]) || 'remote.dat';
+    const blob = new Blob([buf], { type: 'application/octet-stream' });
+    const file = new File([blob], name);
+    await openFile(file);
   }
 
   // ── boot ────────────────────────────────────────────────────────────────────
@@ -781,6 +1130,11 @@ window.App = (function (ns) {
     wire();
     refreshButtons();
     setTimeout(() => refs.shade.remove(), 400);
+    restoreSnapshot();
+    try {
+      const m = location.hash.match(/^#file=(.+)$/);
+      if (m && m[1]) await loadFromUrl(m[1]);
+    } catch (e) { /* ignore */ }
   }
 
   A.refreshAll = refreshAll;
@@ -805,4 +1159,10 @@ window.App = (function (ns) {
 
 window.addEventListener('DOMContentLoaded', () => {
   window.App.boot();
+  // PWA: register service worker (http(s) only; file:// has no SW)
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    try {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    } catch (e) { /* ignore */ }
+  }
 });

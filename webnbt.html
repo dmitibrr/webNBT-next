@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#16181d" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <title>webNBT · NBT editor</title>
 
   <style>
@@ -153,9 +156,53 @@ body.no-right #right-pane { display: none; }
 #hexview .ascii { color: var(--text); }
 #hexview .hl { color: var(--accent); font-weight: 700; }
 
+/* interactive hex overlay */
+#hexview .hex-wrap { white-space: pre; }
+#hexview .hex-row { display: flex; gap: 10px; padding: 1px 4px; border-radius: 4px; cursor: pointer; }
+#hexview .hex-row:hover { background: var(--bg-hover); }
+#hexview .hex-off { color: var(--text-faint); min-width: 44px; }
+#hexview .hex-bytes, #hexview .hex-chars { display: inline-block; }
+#hexview .hex-byte { display: inline-block; width: 1.6em; }
+#hexview .hex-byte.hl { background: color-mix(in srgb, var(--accent) 28%, transparent); color: var(--text); border-radius: 2px; }
+#hexview .hex-char.hl { background: color-mix(in srgb, var(--accent) 28%, transparent); color: var(--text); border-radius: 2px; }
+
 /* ── tree ── */
 #tree { padding: 8px 6px 40px; user-select: none; outline: none; }
 #tree ul.tree { list-style: none; }
+
+/* chunk tabs + diff panel */
+#chunk-tabs { display: flex; gap: 4px; padding: 6px 8px 0; flex-wrap: wrap; }
+#chunk-tabs.hidden { display: none; }
+.chunk-tab {
+  font: inherit; font-size: 12px; color: var(--text-dim);
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 6px 6px 0 0; padding: 3px 10px; cursor: pointer;
+}
+.chunk-tab.active { color: var(--text); border-color: var(--accent); background: var(--bg-input); }
+
+.diff-panel {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 46%; max-width: 420px;
+  background: var(--bg-panel); border-left: 1px solid var(--border);
+  box-shadow: -6px 0 18px rgba(0,0,0,.25); padding: 10px; z-index: 20;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.diff-head { font-weight: 700; margin-bottom: 8px; }
+.diff-list { flex: 1; overflow: auto; }
+.diff-row {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  font: inherit; font-size: 12px; padding: 4px 6px; margin: 2px 0;
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+}
+.diff-row:hover { border-color: var(--accent); }
+.diff-badge {
+  flex: 0 0 auto; font-size: 10px; padding: 1px 6px; border-radius: 8px;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.diff-row.add .diff-badge { background: #2a5d34; color: #9be8a8; }
+.diff-row.remove .diff-badge { background: #5d2a2a; color: #ff9a9a; }
+.diff-row.change .diff-badge { background: #5d4f2a; color: #ffe08a; }
+.diff-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diff-close { margin-top: 8px; align-self: flex-end; }
 #tree ul.tree ul { list-style: none; margin-left: 18px; }
 #tree li {
   display: block;
@@ -425,6 +472,7 @@ window.NBT = (function (ns) {
       'toast.copied': 'Copied {0}',
       'err.parse': 'Could not parse file as NBT',
       'warn.parseIssues': 'Parse had issues ({0}) — lenient mode',
+      'warn.chunkIssues': ['Save warning: {0} issue', 'Save warning: {0} issues'],
       'toast.savedRegion': 'Saved region file',
       'toast.stagedChunk': 'Staged chunk r.{0}.{1} — save the region file to write',
       'toast.saved': 'Saved {0}',
@@ -439,6 +487,15 @@ window.NBT = (function (ns) {
       'formats.exportSNBT': 'Export as SNBT',
       'formats.exportJSON': 'Export as JSON',
       'formats.import': 'Import SNBT / JSON file…',
+      'formats.exportBase64': 'Export raw NBT as base64',
+      'formats.copyPython': 'Copy as Python (nbtlib)',
+      'formats.exportB64SNBT': 'Copy SNBT as base64',
+      'formats.recent': '▾ Recent files',
+      'formats.compare': 'Compare with another NBT file…',
+      'compare.title': 'Diff vs {0}',
+      'compare.changes': ['{0} difference', '{0} differences'],
+      'compare.identical': 'Files are identical',
+      'compare.close': 'Close diff',
       'toast.importedSNBT': 'Imported from SNBT',
       'toast.importedJSON': 'Imported from JSON',
       'err.importFailed': 'Import failed: {0}',
@@ -481,6 +538,10 @@ window.NBT = (function (ns) {
       'tree.badge.tags': ['{0} tag', '{0} tags'],
       'tree.badge.items': ['{0} item', '{0} items'],
       'lang.label': 'Language',
+      'btn.types.title': 'Toggle localized type names',
+      'type.0': 'End', 'type.1': 'Byte', 'type.2': 'Short', 'type.3': 'Int', 'type.4': 'Long',
+      'type.5': 'Float', 'type.6': 'Double', 'type.7': 'ByteArray', 'type.8': 'String',
+      'type.9': 'List', 'type.10': 'Compound', 'type.11': 'IntArray', 'type.12': 'LongArray',
     },
     es: {
       'app.title': 'webNBT · editor de NBT',
@@ -522,6 +583,7 @@ window.NBT = (function (ns) {
       'toast.copied': 'Copiado {0}',
       'err.parse': 'No se pudo analizar el archivo como NBT',
       'warn.parseIssues': 'El análisis tuvo problemas ({0}) — modo tolerante',
+      'warn.chunkIssues': ['Advertencia al guardar: {0} problema', 'Advertencia al guardar: {0} problemas'],
       'toast.savedRegion': 'Archivo de región guardado',
       'toast.stagedChunk': 'Chunk r.{0}.{1} preparado — guarda el archivo de región para escribir',
       'toast.saved': 'Guardado {0}',
@@ -536,6 +598,15 @@ window.NBT = (function (ns) {
       'formats.exportSNBT': 'Exportar como SNBT',
       'formats.exportJSON': 'Exportar como JSON',
       'formats.import': 'Importar archivo SNBT / JSON…',
+      'formats.exportBase64': 'Exportar NBT sin comprimir como base64',
+      'formats.copyPython': 'Copiar como Python (nbtlib)',
+      'formats.exportB64SNBT': 'Copiar SNBT como base64',
+      'formats.recent': '▾ Archivos recientes',
+      'formats.compare': 'Comparar con otro archivo NBT…',
+      'compare.title': 'Diferencias vs {0}',
+      'compare.changes': ['{0} diferencia', '{0} diferencias'],
+      'compare.identical': 'Los archivos son idénticos',
+      'compare.close': 'Cerrar diff',
       'toast.importedSNBT': 'Importado desde SNBT',
       'toast.importedJSON': 'Importado desde JSON',
       'err.importFailed': 'Error de importación: {0}',
@@ -578,6 +649,10 @@ window.NBT = (function (ns) {
       'tree.badge.tags': ['{0} etiqueta', '{0} etiquetas'],
       'tree.badge.items': ['{0} objeto', '{0} objetos'],
       'lang.label': 'Idioma',
+      'btn.types.title': 'Alternar nombres de tipo localizados',
+      'type.0': 'End', 'type.1': 'Byte', 'type.2': 'Short', 'type.3': 'Entero', 'type.4': 'Long',
+      'type.5': 'Flotante', 'type.6': 'Doble', 'type.7': 'Matriz de bytes', 'type.8': 'Texto',
+      'type.9': 'Lista', 'type.10': 'Compuesto', 'type.11': 'Matriz de enteros', 'type.12': 'Matriz de longs',
     },
     ru: {
       'app.title': 'webNBT · редактор NBT',
@@ -619,6 +694,7 @@ window.NBT = (function (ns) {
       'toast.copied': 'Скопировано: {0}',
       'err.parse': 'Не удалось разобрать файл как NBT',
       'warn.parseIssues': 'При разборе были проблемы ({0}) — щадящий режим',
+      'warn.chunkIssues': ['Предупреждение при сохранении: {0} проблема', 'Предупреждение при сохранении: {0} проблемы', 'Предупреждение при сохранении: {0} проблем'],
       'toast.savedRegion': 'Файл региона сохранён',
       'toast.stagedChunk': 'Чанк r.{0}.{1} готов — сохраните файл региона, чтобы записать',
       'toast.saved': 'Сохранено: {0}',
@@ -633,6 +709,15 @@ window.NBT = (function (ns) {
       'formats.exportSNBT': 'Экспорт в SNBT',
       'formats.exportJSON': 'Экспорт в JSON',
       'formats.import': 'Импорт файла SNBT / JSON…',
+      'formats.exportBase64': 'Экспорт сырого NBT в base64',
+      'formats.copyPython': 'Копировать как Python (nbtlib)',
+      'formats.exportB64SNBT': 'Копировать SNBT в base64',
+      'formats.recent': '▾ Недавние файлы',
+      'formats.compare': 'Сравнить с другим NBT-файлом…',
+      'compare.title': 'Различия с {0}',
+      'compare.changes': ['{0} различие', '{0} различия', '{0} различий'],
+      'compare.identical': 'Файлы идентичны',
+      'compare.close': 'Закрыть diff',
       'toast.importedSNBT': 'Импортировано из SNBT',
       'toast.importedJSON': 'Импортировано из JSON',
       'err.importFailed': 'Ошибка импорта: {0}',
@@ -675,6 +760,10 @@ window.NBT = (function (ns) {
       'tree.badge.tags': ['{0} тег', '{0} тега', '{0} тегов'],
       'tree.badge.items': ['{0} предмет', '{0} предмета', '{0} предметов'],
       'lang.label': 'Язык',
+      'btn.types.title': 'Локализованные названия типов',
+      'type.0': 'End', 'type.1': 'Байт', 'type.2': 'Короткое', 'type.3': 'Целое', 'type.4': 'Длинное',
+      'type.5': 'Плавающее', 'type.6': 'Двойное', 'type.7': 'Массив байт', 'type.8': 'Строка',
+      'type.9': 'Список', 'type.10': 'Составной', 'type.11': 'Массив int', 'type.12': 'Массив long',
     },
     zh: {
       'app.title': 'webNBT · NBT 编辑器',
@@ -716,6 +805,7 @@ window.NBT = (function (ns) {
       'toast.copied': '已复制 {0}',
       'err.parse': '无法将文件解析为 NBT',
       'warn.parseIssues': '解析出现问题（{0}）— 宽松模式',
+      'warn.chunkIssues': '保存警告：{0} 个问题',
       'toast.savedRegion': '已保存区域文件',
       'toast.stagedChunk': '区块 r.{0}.{1} 已暂存 — 保存区域文件以写入',
       'toast.saved': '已保存 {0}',
@@ -730,6 +820,15 @@ window.NBT = (function (ns) {
       'formats.exportSNBT': '导出为 SNBT',
       'formats.exportJSON': '导出为 JSON',
       'formats.import': '导入 SNBT / JSON 文件…',
+      'formats.exportBase64': '将原始 NBT 导出为 base64',
+      'formats.copyPython': '复制为 Python（nbtlib）',
+      'formats.exportB64SNBT': '将 SNBT 复制为 base64',
+      'formats.recent': '▾ 最近文件',
+      'formats.compare': '与另一个 NBT 文件比较…',
+      'compare.title': '与 {0} 的差异',
+      'compare.changes': '{0} 处差异',
+      'compare.identical': '文件相同',
+      'compare.close': '关闭差异',
       'toast.importedSNBT': '已从 SNBT 导入',
       'toast.importedJSON': '已从 JSON 导入',
       'err.importFailed': '导入失败：{0}',
@@ -772,6 +871,10 @@ window.NBT = (function (ns) {
       'tree.badge.tags': '{0} 个标签',
       'tree.badge.items': '{0} 个物品',
       'lang.label': '语言',
+      'btn.types.title': '切换本地化类型名称',
+      'type.0': 'End', 'type.1': '字节', 'type.2': '短整型', 'type.3': '整型', 'type.4': '长整型',
+      'type.5': '单精度浮点', 'type.6': '双精度浮点', 'type.7': '字节数组', 'type.8': '字符串',
+      'type.9': '列表', 'type.10': '复合', 'type.11': '整型数组', 'type.12': '长整型数组',
     },
     ja: {
       'app.title': 'webNBT · NBT エディタ',
@@ -813,6 +916,7 @@ window.NBT = (function (ns) {
       'toast.copied': 'コピーしました: {0}',
       'err.parse': 'ファイルを NBT として解析できませんでした',
       'warn.parseIssues': '解析に問題がありました（{0}）— 寛容モード',
+      'warn.chunkIssues': '保存時の警告：{0} 件の問題',
       'toast.savedRegion': 'リージョンファイルを保存しました',
       'toast.stagedChunk': 'チャンク r.{0}.{1} をステージング — リージョンファイルを保存して書き込み',
       'toast.saved': '保存しました: {0}',
@@ -827,6 +931,15 @@ window.NBT = (function (ns) {
       'formats.exportSNBT': 'SNBT としてエクスポート',
       'formats.exportJSON': 'JSON としてエクスポート',
       'formats.import': 'SNBT / JSON ファイルをインポート…',
+      'formats.exportBase64': '生の NBT を base64 でエクスポート',
+      'formats.copyPython': 'Python（nbtlib）としてコピー',
+      'formats.exportB64SNBT': 'SNBT を base64 としてコピー',
+      'formats.recent': '▾ 最近のファイル',
+      'formats.compare': '別の NBT ファイルと比較…',
+      'compare.title': '{0} との差分',
+      'compare.changes': '{0} 件の差分',
+      'compare.identical': 'ファイルは同一です',
+      'compare.close': '差分を閉じる',
       'toast.importedSNBT': 'SNBT からインポートしました',
       'toast.importedJSON': 'JSON からインポートしました',
       'err.importFailed': 'インポートに失敗しました: {0}',
@@ -869,12 +982,30 @@ window.NBT = (function (ns) {
       'tree.badge.tags': '{0} タグ',
       'tree.badge.items': '{0} アイテム',
       'lang.label': '言語',
+      'btn.types.title': 'ローカライズした型名に切り替え',
+      'type.0': 'End', 'type.1': 'バイト', 'type.2': 'ショート', 'type.3': '整数', 'type.4': 'ロング',
+      'type.5': 'フロート', 'type.6': 'ダブル', 'type.7': 'バイト配列', 'type.8': '文字列',
+      'type.9': 'リスト', 'type.10': 'コンパウンド', 'type.11': '整数配列', 'type.12': 'ロング配列',
     },
   };
 
   let lang = detectLang();
+  let localizeTypes = false;
+  try { localizeTypes = localStorage.getItem('webnbt-localize-types') === '1'; } catch (e) { /* ignore */ }
+
+  function setLocalizeTypes(on) {
+    localizeTypes = !!on;
+    try { localStorage.setItem('webnbt-localize-types', localizeTypes ? '1' : '0'); } catch (e) { /* ignore */ }
+    if (window.App && typeof window.App.refreshAll === 'function') {
+      try { window.App.refreshAll(); } catch (e) { /* ignore */ }
+    }
+  }
 
   function detectLang() {
+    try {
+      const urlLang = new URLSearchParams(location.search).get('lang');
+      if (LOCALES.includes(urlLang)) return urlLang;
+    } catch (e) { /* ignore */ }
     try {
       const saved = localStorage.getItem('webnbt-lang');
       if (LOCALES.includes(saved)) return saved;
@@ -972,7 +1103,12 @@ window.NBT = (function (ns) {
 
   ns.t = t;
   ns.tpl = tpl;
-  ns.I18N = { t, tpl, setLang, get lang() { return lang; }, locales: LOCALES };
+  ns.I18N = {
+    t, tpl, setLang, setLocalizeTypes,
+    get lang() { return lang; },
+    get localizeTypes() { return localizeTypes; },
+    locales: LOCALES,
+  };
 
   return ns;
 })(window.NBT || {});
@@ -1005,7 +1141,13 @@ window.NBT = (function (ns) {
     7: 'ByteArray', 8: 'String', 9: 'List', 10: 'Compound', 11: 'IntArray', 12: 'LongArray',
   };
 
-  function typeName(t) { return TYPE_NAMES[t] || ('Tag#' + t); }
+  function typeName(t) {
+    if (ns.I18N && ns.I18N.localizeTypes) {
+      const loc = ns.t('type.' + t);
+      if (loc && loc.indexOf('type.') !== 0) return loc;
+    }
+    return TYPE_NAMES[t] || ('Tag#' + t);
+  }
 
   const ARRAY_TYPES = { 7: true, 11: true, 12: true };
   const NUMERIC = { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true };
@@ -1112,6 +1254,57 @@ window.NBT = (function (ns) {
     if (isList(tag)) return tag.v.map((child, i) => ({ key: String(i), tag: child }));
     return [];
   }
+
+  // Structural diff between two models.
+  // Returns [{ path, kind: 'same'|'add'|'remove'|'change', a?, b? }].
+  // A leaf value compare is "different" when JSON differs.
+  function diff(a, b) {
+    const out = [];
+    const seen = new Set();
+
+    function leafVal(tag) {
+      if (!tag) return undefined;
+      if (tag.t === T.ByteArray) return tag.v;
+      if (tag.t === T.Long) return String(tag.v);
+      if (Array.isArray(tag.v)) return tag.v.map((x) => typeof x === 'bigint' ? String(x) : x);
+      return tag.v;
+    }
+
+    function isLeaf(tag) { return !isContainer(tag); }
+
+    function walkPair(pa, pb, path) {
+      const pk = path.join('\u001f');
+      const aLeaf = pa && isLeaf(pa), bLeaf = pb && isLeaf(pb);
+      if (aLeaf || bLeaf) {
+        const la = leafVal(pa), lb = leafVal(pb);
+        if (pa && pb && aLeaf && bLeaf) {
+          const same = JSON.stringify(la) === JSON.stringify(lb);
+          if (!same) out.push({ path: path.slice(), kind: 'change', a: pa, b: pb });
+          else out.push({ path: path.slice(), kind: 'same', a: pa, b: pb });
+        } else if (pa && !pb) out.push({ path: path.slice(), kind: 'remove', a: pa });
+        else if (!pa && pb) out.push({ path: path.slice(), kind: 'add', b: pb });
+        return;
+      }
+      // both containers (or one missing)
+      if (!pa && pb) { out.push({ path: path.slice(), kind: 'add', b: pb }); return; }
+      if (pa && !pb) { out.push({ path: path.slice(), kind: 'remove', a: pa }); return; }
+      // container type mismatch
+      if (pa.t !== pb.t) { out.push({ path: path.slice(), kind: 'change', a: pa, b: pb }); return; }
+
+      const ea = childEntries(pa), eb = childEntries(pb);
+      const keys = new Set([...ea.map((e) => e.key), ...eb.map((e) => e.key)]);
+      for (const k of keys) {
+        const ca = ea.find((e) => e.key === k);
+        const cb = eb.find((e) => e.key === k);
+        walkPair(ca && ca.tag, cb && cb.tag, path.concat([k]));
+      }
+    }
+
+    walkPair(a, b, []);
+    return out;
+  }
+
+  ns.diff = diff;
 
   ns.T = T;
   ns.typeName = typeName;
@@ -1273,6 +1466,90 @@ window.NBT = (function (ns) {
     return readAll(new Blob([raw]).stream().pipeThrough(cs));
   }
 
+  // ── JS mirror of the wasm encode, with per-path byte offsets ───────────────
+  // Returns { bytes: Uint8Array, ranges: Map<pathKey, [start,end)> } so the hex
+  // view can highlight the range of any tag and map clicks back to paths.
+  // Format mirrors nbt_utils.cpp encodeModel/encodeTag exactly.
+
+  function writeStringModUTF8(out, s) {
+    const w = [];
+    for (let i = 0; i < s.length; i++) {
+      const u = s.charCodeAt(i);
+      if (u >= 0x0001 && u <= 0x007F) w.push(u);
+      else if (u <= 0x07FF) { w.push(0xC0 | (u >> 6), 0x80 | (u & 0x3F)); }
+      else { w.push(0xE0 | (u >> 12), 0x80 | ((u >> 6) & 0x3F), 0x80 | (u & 0x3F)); }
+    }
+    pushU16(out, w.length);
+    for (const b of w) out.push(b);
+  }
+
+  function pushU16(out, v) { out.push((v >> 8) & 0xff, v & 0xff); }
+  function pushU32(out, v) { out.push((v >>> 24) & 0xff, (v >>> 16) & 0xff, (v >>> 8) & 0xff, v & 0xff); }
+  function pushU64(out, v) {
+    for (let i = 7; i >= 0; i--) out.push(Number((v >> BigInt(i * 8)) & 0xffn));
+  }
+
+  function b64ToArray(v) { return b64ToBytes(v); }
+
+  function encodeTagOffset(out, m, withName, ranges, pathKey) {
+    const start = out.length;
+    if (withName) writeStringModUTF8(out, String(m.n || ''));
+    const t = m.t;
+    switch (t) {
+      case 1: out.push(Number(m.v) & 0xff); break;
+      case 2: pushU16(out, Number(m.v) & 0xffff); break;
+      case 3: pushU32(out, Number(m.v) >>> 0); break;
+      case 4: pushU64(out, BigInt(m.v)); break;
+      case 5: { const buf = new ArrayBuffer(4); new DataView(buf).setFloat32(0, Number(m.v), false); out.push(...new Uint8Array(buf)); break; }
+      case 6: { const buf = new ArrayBuffer(8); new DataView(buf).setFloat64(0, Number(m.v), false); out.push(...new Uint8Array(buf)); break; }
+      case 8: writeStringModUTF8(out, String(m.v)); break;
+      case 7: { const arr = b64ToArray(m.v); pushU32(out, arr.length); for (const b of arr) out.push(b); break; }
+      case 11: { const arr = m.v || []; pushU32(out, arr.length); for (const v of arr) pushU32(out, Number(v) >>> 0); break; }
+      case 12: { const arr = m.v || []; pushU32(out, arr.length); for (const v of arr) pushU64(out, BigInt(v)); break; }
+      case 9: {
+        const et = m.et === undefined ? 0 : m.et;
+        out.push(et);
+        const arr = m.v || [];
+        pushU32(out, arr.length);
+        for (let i = 0; i < arr.length; i++) {
+          encodeTagOffset(out, arr[i], false, ranges, childKey(pathKey, i));
+        }
+        break;
+      }
+      case 10: {
+        const pairs = m.v || [];
+        for (let i = 0; i < pairs.length; i++) {
+          const [k, child] = pairs[i];
+          out.push(child.t);
+          writeStringModUTF8(out, String(k));
+          encodeTagOffset(out, child, false, ranges, childKey(pathKey, k));
+        }
+        out.push(0); // T_End
+        break;
+      }
+      default: throw new Error('encode: unsupported tag type ' + t);
+    }
+    const end = out.length;
+    ranges.set(pathKey || '', [start, end]);
+    return out.length;
+  }
+
+  // Encode a model into bytes + offset map. Returns { bytes, ranges }.
+  // ranges keys use the same \u001f-joined paths as the tree widget.
+  const SEP = '\u001f';
+  function childKey(pathKey, seg) { return pathKey ? pathKey + SEP + seg : String(seg); }
+
+  function encodeWithOffsets(model) {
+    const out = [];
+    const ranges = new Map();
+    out.push(model.t);
+    encodeTagOffset(out, model, true, ranges, '');
+    // include the leading type byte in the root's range
+    const rootRange = ranges.get('');
+    if (rootRange) ranges.set('', [0, rootRange[1]]);
+    return { bytes: new Uint8Array(out), ranges };
+  }
+
   function download(bytes, filename, mime) {
     const blob = new Blob([bytes], { type: mime || 'application/octet-stream' });
     const a = document.createElement('a');
@@ -1287,6 +1564,7 @@ window.NBT = (function (ns) {
     ready, loadBuffer, compileModel, download,
     bytesToB64, b64ToBytes, sniffMode, MODES,
     decompressKind, hasGzipMagic,
+    encodeWithOffsets,
   };
 
   return ns;
@@ -1664,7 +1942,8 @@ window.NBT = (function (ns) {
       if (data.length < 5) return null;
       const length = ((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]) >>> 0;
       const compression = data[4];
-      const payload = data.subarray(5, Math.min(5 + length, data.length));
+      // length includes the 1-byte compression field; payload is after it
+      const payload = data.subarray(5, Math.min(4 + length, data.length));
       return { compression, payload, raw: data };
     }
 
@@ -1936,6 +2215,70 @@ window.NBT = (function (ns) {
 
   ns.mcdata = { blockName, itemName, smartFor, itemStackInfo, looksLikeBlockEntity };
 
+  // ── chunk validation (warn, not hard-block) ────────────────────────────────
+  // Returns an array of human-readable issues for a chunk-like model.
+  function validateChunk(model) {
+    const issues = [];
+    if (!model) return issues;
+    if (isCompound(model)) {
+      const hasLevel = !!get(model, 'Level');
+      const root = hasLevel ? get(model, 'Level') : model;
+      if (isCompound(root)) {
+        const sections = get(root, 'Sections');
+        if (isList(sections)) {
+          for (let i = 0; i < sections.v.length; i++) {
+            const sec = sections.v[i];
+            if (!isCompound(sec)) continue;
+            const y = getVal(sec, 'Y');
+            const palette = get(sec, 'Palette');
+            const blocks = get(sec, 'BlockStates');
+            if (!palette && !blocks) continue;
+            const palCount = isList(palette) ? palette.v.length : 1;
+            if (isList(palette) && palette.v.length > 1) {
+              const needed = Math.ceil(4096 * Math.log2(palette.v.length) / 64);
+              const len = getVal(sec, 'BlockStates');
+              const arrLen = Array.isArray(len) ? len.length : 0;
+              if (arrLen && arrLen < needed) {
+                issues.push('Section Y=' + y + ': BlockStates has ' + arrLen + ' longs, need ≥ ' + needed + ' for ' + palette.v.length + ' palette entries');
+              }
+            }
+            if (isList(palette)) {
+              for (const p of palette.v) {
+                if (isCompound(p)) {
+                  const nm = getVal(p, 'Name');
+                  if (typeof nm === 'string' && nm.indexOf(':') < 0) issues.push('Section Y=' + y + ': palette name "' + nm + '" has no namespace');
+                }
+              }
+            }
+          }
+        }
+        const pos = get(root, 'xPos');
+        if (pos === undefined && getVal(root, 'xPos') === undefined && !hasLevel) {
+          // some modern chunks have xPos; others rely on region position
+        }
+        const biomes = get(root, 'Biomes');
+        if (isList(biomes) && biomes.v.length === 0) issues.push('Biomes list is empty');
+        const entities = get(root, 'Entities');
+        if (isList(entities)) {
+          for (let i = 0; i < entities.v.length; i++) {
+            const e = entities.v[i];
+            if (isCompound(e) && !get(e, 'id')) issues.push('Entity #' + i + ' has no "id"');
+          }
+        }
+        const tileEntities = get(root, 'TileEntities');
+        if (isList(tileEntities)) {
+          for (let i = 0; i < tileEntities.v.length; i++) {
+            const e = tileEntities.v[i];
+            if (isCompound(e) && !get(e, 'id')) issues.push('TileEntity #' + i + ' has no "id"');
+          }
+        }
+      }
+    }
+    return issues;
+  }
+
+  ns.mcdata.validateChunk = validateChunk;
+
   return ns;
 })(window.NBT || {});
 
@@ -2071,13 +2414,63 @@ window.NBT = (function (ns) {
 
   Tree.prototype.matches = function (tag, path, q) {
     if (!q) return false;
+    // structured: "/path/glob/**"  or  "@Type"
+    if (q[0] === '/') return this.matchPath(tag, path, q);
+    if (q[0] === '@') {
+      const want = q.slice(1).trim().toLowerCase();
+      return ns.typeName(tag.t).toLowerCase() === want ||
+        (String(tag.t) === want);
+    }
     const key = String(path.length ? path[path.length - 1] : (tag.n || ''));
     const text = (key + ' ' + ns.typeName(tag.t) + ' ' + valueText(tag)).toLowerCase();
-    return text.indexOf(q) !== -1;
+    return text.indexOf(q.toLowerCase()) !== -1;
   };
 
+  // Glob over path segments: '*' = one segment, '**' = any number, exact names otherwise.
+  Tree.prototype.matchPath = function (tag, path, q) {
+    let pat = q.slice(1);
+    // trailing slash means "anything below"
+    if (pat.endsWith('/')) pat += '**';
+    const parts = pat.split('/').filter((s) => s !== '');
+    if (parts.length === 0) return true;
+    const names = path.map((s) => String(s));
+    if (parts[parts.length - 1] === '**') {
+      return matchSegments(parts.slice(0, -1), names, true);
+    }
+    return matchSegments(parts, names, false);
+  };
+
+  function matchSegments(pat, names, trailingStar) {
+    const plen = pat.length, nlen = names.length;
+    // simple non-'**' case
+    if (!pat.includes('**')) {
+      if (nlen < plen) return false;
+      for (let i = 0; i < plen; i++) {
+        if (pat[i] !== '*' && pat[i] !== names[i]) return false;
+      }
+      return trailingStar ? nlen >= plen : nlen === plen;
+    }
+    // recursive glob with '**'
+    const memo = {};
+    const go = (pi, ni) => {
+      const k = pi + ':' + ni;
+      if (memo[k] !== undefined) return memo[k];
+      if (pi === plen) return trailingStar ? ni <= nlen : ni === nlen;
+      if (pat[pi] === '**') {
+        for (let skip = 0; skip <= nlen - ni; skip++) {
+          if (go(pi + 1, ni + skip)) return memo[k] = true;
+        }
+        return memo[k] = false;
+      }
+      if (ni >= nlen) return memo[k] = false;
+      const ok = pat[pi] === '*' || pat[pi] === names[ni];
+      return memo[k] = ok ? go(pi + 1, ni + 1) : false;
+    };
+    return go(0, 0);
+  }
+
   Tree.prototype.applySearch = function (q) {
-    this.query = q ? q.toLowerCase() : '';
+    this.query = q || '';
     if (!this.query) {
       this.searchResults = [];
       this.searchIdx = 0;
@@ -2267,6 +2660,11 @@ window.NBT = (function (ns) {
     const self = this;
     li.addEventListener('dragstart', (e) => {
       e.dataTransfer.setData('text/plain', pkey(path));
+      // cross-tab/--window payload: full tag JSON
+      try {
+        const tag = this.getAt(path);
+        e.dataTransfer.setData('application/x-webnbt-tag', JSON.stringify(tag));
+      } catch (err) { /* ignore */ }
       e.dataTransfer.effectAllowed = 'move';
       self._dragPath = path;
     });
@@ -2298,7 +2696,17 @@ window.NBT = (function (ns) {
       li.classList.remove('drop-top', 'drop-mid', 'drop-bottom');
       const fromPath = self._dragPath;
       self._dragPath = null;
-      if (!fromPath) return;
+      if (!fromPath) {
+        // external (cross-window) tag drop?
+        const ext = e.dataTransfer && e.dataTransfer.getData('application/x-webnbt-tag');
+        if (ext && self.opts.onExternalDrop) {
+          try {
+            const tag = JSON.parse(ext);
+            self.opts.onExternalDrop(tag, path, container);
+          } catch (err) { /* ignore */ }
+        }
+        return;
+      }
       const dest = path;
       const zone = (() => {
         const rect = node.getBoundingClientRect();
@@ -2796,6 +3204,7 @@ window.App = (function (ns) {
     hist: [], future: [],
     clipboard: null,
     selectedPath: null,
+    openChunks: [],          // chunk docs opened from a region: { doc, x, z }
     hexOn: true, smartOn: true, theme: 'dark',
     inspector: null, tree: null,
   };
@@ -2814,7 +3223,7 @@ window.App = (function (ns) {
       },
       shade: $('#loading-shade'), loading: $('#loading-text'),
       empty: $('#empty-state'), file: $('#file-input'), drop: $('#drop-zone'),
-      search: $('#search-field'),
+      search: $('#search-field'), tabs: $('#chunk-tabs'), fileCompare: $('#file-compare'),
     };
   }
 
@@ -2852,11 +3261,15 @@ window.App = (function (ns) {
       onSelect: (path) => {
         A.selectedPath = path;
         renderInspector();
+        if (A.hexOn && A.hexBytes) renderHex();
       },
       onCommit: (tag) => { commitEdit(); },
       onRename: (tag, path, newName) => { commitRename(tag, path, newName); },
       onMove: (info) => { moveTag(info); },
       onContextMenu: (path, x, y) => { showContextMenu(path, x, y); },
+      onExternalDrop: (tag, destPath, destIsContainer) => {
+        insertExternalTag(tag, destPath, destIsContainer);
+      },
     });
     renderInspector();
   }
@@ -3099,6 +3512,36 @@ window.App = (function (ns) {
     return isCompound(container) ? container.v[i] && container.v[i][0] : String(i);
   }
 
+  // Cross-window tag drop: no doc → open as new; else insert into the drop target.
+  function insertExternalTag(tag, destPath, destIsContainer) {
+    if (!A.doc || A.doc.kind === 'region') {
+      A.doc = { kind: 'nbt', filename: 'dropped.dat', model: clone(tag), mode: 'gzip' };
+      A.hist = []; A.future = [];
+      A.selectedPath = null;
+      refs.empty.classList.add('hidden');
+      A.refreshStatus();
+      refreshAll();
+      return;
+    }
+    pushHistory();
+    const copy = clone(tag);
+    const target = destPath && destPath.length ? ns.getByPath(A.doc.model, destPath) : A.doc.model;
+    const container = (target && (isCompound(target) || isList(target))) ? target : parentOf(destPath);
+    if (!container) { A.refreshAll(); return; }
+    let sel;
+    if (isCompound(container)) {
+      const name = nextFreeKey(container, copy.n || 'new_tag');
+      container.v.push([name, copy]);
+      copy.n = name;
+      sel = destPath.concat([name]);
+    } else if (isList(container)) {
+      container.v.push(copy);
+      sel = destPath.concat([String(container.v.length - 1)]);
+    }
+    A.refreshAll();
+    if (sel) { A.selectedPath = sel; A.tree.select(sel, true); }
+  }
+
   // ── menus ───────────────────────────────────────────────────────────────────
 
   function showContextMenu(path, x, y) {
@@ -3232,6 +3675,8 @@ window.App = (function (ns) {
     if (ns.region.probe(buf) || /\.(mca|mcr)$/i.test(file.name)) {
       A.region = { container: ns.region.create(buf), filename: file.name };
       A.doc = { kind: 'region', filename: file.name };
+      A.openChunks = [];
+      renderChunkTabs();
       refs.empty.classList.add('hidden');
       A.refreshStatus();
       refreshAll();
@@ -3250,6 +3695,7 @@ window.App = (function (ns) {
     refs.empty.classList.add('hidden');
     A.refreshStatus();
     refreshAll();
+    addRecent(file.name);
     if ((loaded.res.errors || []).length) {
       toast(t('warn.parseIssues', loaded.res.errors.length), 'warn');
     }
@@ -3271,9 +3717,125 @@ window.App = (function (ns) {
       toast(t('toast.stagedChunk', A.doc.x, A.doc.z), 'warn');
       return;
     }
+    const issues = ns.mcdata.validateChunk(A.doc.model);
+    if (issues.length) {
+      toast(t('warn.chunkIssues', issues.length) + ' — ' + issues[0], 'warn');
+    }
     const bytes = await ns.codec.compileModel(A.doc.model, A.doc.mode || 'gzip');
     ns.codec.download(bytes, A.doc.filename);
     toast(t('toast.saved', A.doc.filename));
+  }
+
+  function openChunkDoc(model, x, z) {
+    const doc = { kind: 'chunk', filename: x + '.' + z + '.nbt', model, mode: 'zlib', region: A.region ? A.region.container : null, x, z };
+    // register tab (dedupe by x,z)
+    const existing = A.openChunks.findIndex((c) => c.x === x && c.z === z);
+    const entry = { x, z, doc };
+    if (existing >= 0) A.openChunks[existing] = entry;
+    else A.openChunks.push(entry);
+    switchChunk(entry);
+  }
+
+  function switchChunk(entry) {
+    A.doc = entry.doc;
+    A.hist = []; A.future = [];
+    A.selectedPath = null;
+    refs.tree.classList.remove('hidden');
+    A.refreshStatus();
+    refreshAll();
+    renderChunkTabs();
+  }
+
+  function renderChunkTabs() {
+    const t = refs.tabs;
+    if (!t) return;
+    t.textContent = '';
+    if (!A.openChunks.length) { t.classList.add('hidden'); return; }
+    t.classList.remove('hidden');
+    for (let i = 0; i < A.openChunks.length; i++) {
+      const c = A.openChunks[i];
+      const tab = el2('button');
+      tab.className = 'chunk-tab' + (A.doc && A.doc.x === c.x && A.doc.z === c.z ? ' active' : '');
+      tab.textContent = 'r.' + c.x + '.' + c.z + ' · ' + (i + 1);
+      tab.title = 'Alt+' + (i + 1);
+      tab.onclick = () => switchChunk(c);
+      t.appendChild(tab);
+    }
+  }
+
+  // ── recent files (menu) ─────────────────────────────────────────────────────
+
+  const RECENT_KEY = 'webnbt-recent';
+  function addRecent(name) {
+    try {
+      const arr = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+      const next = [name, ...arr.filter((n) => n !== name)].slice(0, 8);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+    } catch (e) { /* ignore */ }
+  }
+  function recentList() {
+    try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch (e) { return []; }
+  }
+
+  // ── compare / diff ──────────────────────────────────────────────────────────
+
+  async function compareFile(file) {
+    if (!A.doc || A.doc.kind === 'region') { toast(t('err.parse'), 'err'); return; }
+    const buf = new Uint8Array(await file.arrayBuffer());
+    const loaded = await ns.codec.loadBuffer(buf);
+    if (!loaded.decoded) { toast(t('err.parse'), 'err'); return; }
+    const other = loaded.res.root;
+    const diffs = ns.diff(A.doc.model, other);
+    const changes = diffs.filter((d) => d.kind !== 'same');
+    if (changes.length === 0) { toast(t('compare.identical')); return; }
+    A.diffResults = changes;
+    A.diffFilename = file.name;
+    renderDiffPanel();
+    toast(tpl('compare.changes', changes.length));
+  }
+
+  function renderDiffPanel() {
+    if (!A.diffResults) return;
+    const box = el2('div');
+    box.className = 'diff-panel';
+    const head = el2('div');
+    head.className = 'diff-head';
+    head.textContent = t('compare.title', A.diffFilename || '');
+    box.appendChild(head);
+    const list = el2('div');
+    list.className = 'diff-list';
+    for (const d of A.diffResults) {
+      const row = el2('button');
+      row.className = 'diff-row ' + d.kind;
+      const label = el2('span');
+      label.className = 'diff-path';
+      label.textContent = '/' + d.path.map((s) => String(s)).join('/') || '(root)';
+      const badge = el2('span');
+      badge.className = 'diff-badge';
+      badge.textContent = d.kind;
+      row.appendChild(badge);
+      row.appendChild(label);
+      row.onclick = () => {
+        const p = d.path;
+        A.selectedPath = p;
+        if (A.tree) A.tree.select(p, true);
+        closeMenus();
+      };
+      list.appendChild(row);
+    }
+    const closeBtn = el2('button');
+    closeBtn.className = 'diff-close';
+    closeBtn.textContent = t('compare.close');
+    closeBtn.onclick = () => {
+      A.diffResults = null;
+      const p = refs.tree.parentElement.querySelector('.diff-panel');
+      if (p) p.remove();
+    };
+    box.appendChild(list);
+    box.appendChild(closeBtn);
+    const old = refs.tree.parentElement.querySelector('.diff-panel');
+    if (old) old.remove();
+    refs.tree.parentElement.appendChild(box);
   }
 
   // ── region grid ─────────────────────────────────────────────────────────────
@@ -3302,12 +3864,7 @@ window.App = (function (ns) {
       cell.onclick = async () => {
         const model = await c.chunkModel(chunk.x, chunk.z);
         if (!model) { toast(t('err.chunkUnreadable'), 'err'); return; }
-        A.doc = { kind: 'chunk', filename: chunk.x + '.' + chunk.z + '.nbt', model, mode: 'zlib', region: c, x: chunk.x, z: chunk.z };
-        A.hist = []; A.future = [];
-        A.selectedPath = null;
-        refs.tree.classList.remove('hidden');
-        A.refreshStatus();
-        refreshAll();
+        openChunkDoc(model, chunk.x, chunk.z);
       };
       grid.appendChild(cell);
     }
@@ -3320,6 +3877,8 @@ window.App = (function (ns) {
       if (A.doc.kind === 'chunk') {
         A.region.container.setChunkModel(A.doc.x, A.doc.z, A.doc.model, 2);
         A.doc = { kind: 'region', filename: A.region.filename };
+        A.openChunks = [];
+        renderChunkTabs();
         refreshAll();
         await new Promise((r) => setTimeout(r, 30));
       }
@@ -3333,15 +3892,78 @@ window.App = (function (ns) {
 
   // ── hex ─────────────────────────────────────────────────────────────────────
 
+  // Interactive hex view: rows clickable → select tag by byte offset; the
+  // currently selected tag's byte range is highlighted (mini-map overlay).
   function updateHex() {
     if (!A.hexOn) return;
-    if (!A.doc || A.doc.kind === 'region') { refs.hex.textContent = ''; return; }
+    if (!A.doc || A.doc.kind === 'region') { refs.hex.textContent = ''; A.hexBytes = null; A.hexRanges = null; return; }
     try {
-      const wasm = ns.codec._module;
-      const b64 = wasm.encode(A.doc.model);
-      const bytes = ns.codec.b64ToBytes(b64);
-      refs.hex.textContent = ns.hexRows(bytes, 16);
+      const enc = ns.codec.encodeWithOffsets(A.doc.model);
+      A.hexBytes = enc.bytes;
+      A.hexRanges = enc.ranges;
+      renderHex();
     } catch (e) { refs.hex.textContent = '…'; }
+  }
+
+  function renderHex() {
+    const bytes = A.hexBytes;
+    const ranges = A.hexRanges;
+    if (!bytes) { refs.hex.textContent = ''; return; }
+    const perRow = 16;
+    const hex = el2('div');
+    hex.className = 'hex-wrap';
+
+    // highlight range for the selected path (deepest)
+    let hl = null;
+    if (A.selectedPath && ranges) {
+      hl = ranges.get(A.selectedPath.join('\u001f')) || null;
+    }
+
+    for (let i = 0; i < bytes.length; i += perRow) {
+      const row = el2('div');
+      row.className = 'hex-row';
+      row.dataset.start = i;
+      row.dataset.end = Math.min(i + perRow, bytes.length);
+      const off = el2('span'); off.className = 'hex-off'; off.textContent = i.toString(16).padStart(6, '0');
+      row.appendChild(off);
+      const hb = el2('span'); hb.className = 'hex-bytes';
+      for (let j = i; j < i + perRow && j < bytes.length; j++) {
+        const b = el2('span'); b.className = 'hex-byte';
+        b.textContent = bytes[j].toString(16).padStart(2, '0');
+        if (hl && j >= hl[0] && j < hl[1]) b.classList.add('hl');
+        hb.appendChild(b);
+      }
+      row.appendChild(hb);
+      const ch = el2('span'); ch.className = 'hex-chars';
+      for (let j = i; j < i + perRow && j < bytes.length; j++) {
+        const c = el2('span'); c.className = 'hex-char';
+        c.textContent = (bytes[j] >= 32 && bytes[j] < 127) ? String.fromCharCode(bytes[j]) : '.';
+        if (hl && j >= hl[0] && j < hl[1]) c.classList.add('hl');
+        ch.appendChild(c);
+      }
+      row.appendChild(ch);
+      row.addEventListener('click', () => onHexClick(Number(row.dataset.start)));
+      hex.appendChild(row);
+    }
+    if (bytes.length === 0) hex.textContent = t('hex.empty');
+    refs.hex.textContent = '';
+    refs.hex.appendChild(hex);
+  }
+
+  // Find the deepest tag range containing `offset`; select it in the tree.
+  function onHexClick(offset) {
+    if (!A.hexRanges || !A.doc) return;
+    let best = null, bestKey = null;
+    for (const [key, r] of A.hexRanges) {
+      if (offset >= r[0] && offset < r[1]) {
+        if (!best || (r[1] - r[0]) < (best[1] - best[0])) { best = r; bestKey = key; }
+      }
+    }
+    if (bestKey === null) return;
+    const path = bestKey === '' ? [] : bestKey.split('\u001f');
+    A.selectedPath = path;
+    if (A.tree) A.tree.select(path, true);
+    renderHex();
   }
 
   // ── status / buttons ────────────────────────────────────────────────────────
@@ -3395,6 +4017,45 @@ window.App = (function (ns) {
     ns.codec.download(new TextEncoder().encode(text), A.doc.filename.replace(/\.[^.]+$/, '') + '.json', 'application/json');
   }
 
+  // ── export base64 / python ──────────────────────────────────────────────────
+
+  async function exportCurrentBase64() {
+    if (!A.doc || A.doc.kind === 'region') return;
+    try {
+      const raw = await ns.codec.compileModel(A.doc.model, 'none');
+      const text = ns.codec.bytesToB64(raw);
+      ns.codec.download(new TextEncoder().encode(text), A.doc.filename.replace(/\.[^.]+$/, '') + '.b64', 'text/plain');
+    } catch (e) { toast(t('err.importFailed', String(e)), 'err'); }
+  }
+
+  async function copyPython() {
+    if (!A.doc || A.doc.kind === 'region') return;
+    try {
+      const raw = await ns.codec.compileModel(A.doc.model, 'none');
+      const b64 = ns.codec.bytesToB64(raw);
+      const py = [
+        '# Generated by webNBT',
+        'import base64',
+        'import nbtlib',
+        'raw = base64.b64decode("' + b64 + '")',
+        'root = nbtlib.File.parse_nbt(raw)',
+        '',
+      ].join('\n');
+      await navigator.clipboard.writeText(py);
+      toast('Python');
+    } catch (e) { toast(t('err.importFailed', String(e)), 'err'); }
+  }
+
+  async function copyB64SNBT() {
+    if (!A.doc || A.doc.kind === 'region') return;
+    try {
+      const text = ns.toSNBT(A.doc.model, {});
+      const b64 = btoa(unescape(encodeURIComponent(text)));
+      await navigator.clipboard.writeText(b64);
+      toast('SNBT·b64');
+    } catch (e) { toast(t('err.importFailed', String(e)), 'err'); }
+  }
+
   async function importText(file) {
     const text = await file.text();
     try {
@@ -3427,9 +4088,22 @@ window.App = (function (ns) {
     const items = [
       { label: t('formats.exportSNBT'), action: exportCurrentSNBT },
       { label: t('formats.exportJSON'), action: exportCurrentJSON },
+      { label: t('formats.exportBase64'), action: exportCurrentBase64 },
       { sep: true },
+      { label: t('formats.copyPython'), action: copyPython },
+      { label: t('formats.exportB64SNBT'), action: copyB64SNBT },
+      { sep: true },
+      { label: t('formats.compare'), action: () => refs.fileCompare.click() },
       { label: t('formats.import'), action: () => refs.file.click() },
     ];
+    const recents = recentList();
+    if (recents.length) {
+      items.push({
+        label: t('formats.recent'), submenu: [
+          recents.map((name) => ({ label: name, action: () => { toast(name); } })),
+        ],
+      });
+    }
     showMenu(x, y, items);
   }
 
@@ -3480,6 +4154,11 @@ window.App = (function (ns) {
       A.theme = A.theme === 'dark' ? 'light' : 'dark';
       applyTheme();
     };
+    $('#btn-types').onclick = (e) => {
+      const on = !ns.I18N.localizeTypes;
+      ns.I18N.setLocalizeTypes(on);
+      e.target.classList.toggle('active', on);
+    };
     $('#btn-export').onclick = (e) => {
       const r = e.target.getBoundingClientRect();
       showFormatsMenu(r.left, r.bottom);
@@ -3488,6 +4167,12 @@ window.App = (function (ns) {
     refs.file.addEventListener('change', (e) => {
       for (const f of e.target.files) openFile(f);
       refs.file.value = '';
+    });
+
+    refs.fileCompare.addEventListener('change', (e) => {
+      const f = e.target.files[0];
+      if (f) compareFile(f);
+      refs.fileCompare.value = '';
     });
 
     // drag & drop
@@ -3529,6 +4214,11 @@ window.App = (function (ns) {
       else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
       else if (mod && e.key.toLowerCase() === 'c') { const t = currentTag(); if (t) copyTag(t); }
       else if (mod && e.key.toLowerCase() === 'v') { if (A.selectedPath) pasteAfter(A.selectedPath); }
+      else if (e.altKey && /^[1-9]$/.test(e.key) && A.openChunks.length) {
+        e.preventDefault();
+        const i = Number(e.key) - 1;
+        if (A.openChunks[i]) switchChunk(A.openChunks[i]);
+      }
       else if (e.key === 'Delete' || e.key === 'Backspace') { if (A.selectedPath && A.selectedPath.length) deleteTag(A.selectedPath); }
       else if (e.key === 'F2') { if (A.selectedPath) { const t = currentTag(); if (t) A.tree.beginNameEdit(A.selectedPath, t); } }
       else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -3547,6 +4237,73 @@ window.App = (function (ns) {
     // theme init
     try { const saved = localStorage.getItem('webnbt-theme'); if (saved) A.theme = saved; } catch (e2) {}
     applyTheme();
+
+    window.addEventListener('beforeunload', saveSnapshot);
+    window.addEventListener('pagehide', saveSnapshot);
+  }
+
+  // ── session snapshot (beforeunload → restore) ───────────────────────────────
+
+  const SNAP_KEY = 'webnbt-session';
+
+  function saveSnapshot() {
+    try {
+      if (!A.doc || A.doc.kind === 'region') { localStorage.removeItem(SNAP_KEY); return; }
+      const snap = {
+        filename: A.doc.filename,
+        model: A.doc.model,
+        mode: A.doc.mode,
+        hist: A.hist,
+        future: A.future,
+        selected: A.selectedPath,
+        ts: Date.now(),
+      };
+      const s = JSON.stringify(snap, (k, v) => typeof v === 'bigint' ? v.toString() + 'n' : v);
+      if (s.length > 2 * 1024 * 1024) return; // skip oversized
+      localStorage.setItem(SNAP_KEY, s);
+    } catch (e) { /* ignore */ }
+  }
+
+  function restoreSnapshot() {
+    try {
+      const s = localStorage.getItem(SNAP_KEY);
+      if (!s) return false;
+      localStorage.removeItem(SNAP_KEY);
+      const snap = JSON.parse(s, (k, v) => typeof v === 'string' && /^-?\d+n$/.test(v) ? BigInt(v.slice(0, -1)) : v);
+      if (!snap || !snap.model) return false;
+      A.doc = { kind: 'nbt', filename: snap.filename || 'restored.dat', model: snap.model, mode: snap.mode || 'gzip' };
+      A.hist = snap.hist || []; A.future = snap.future || [];
+      A.selectedPath = snap.selected || null;
+      refs.empty.classList.add('hidden');
+      A.refreshStatus();
+      refreshAll();
+      toast('♻ ' + (snap.filename || 'Session'));
+      return true;
+    } catch (e) { /* ignore */ }
+  }
+
+  // ── URL file param (#file=...) ──────────────────────────────────────────────
+
+  async function loadFromUrl(url) {
+    let buf;
+    try {
+      if (url.startsWith('data:')) {
+        const res = await fetch(url);
+        buf = new Uint8Array(await res.arrayBuffer());
+      } else {
+        // same-origin (or CORS-enabled) fetch; fall back to window.open on failure
+        const res = await fetch(url, { mode: 'cors' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        buf = new Uint8Array(await res.arrayBuffer());
+      }
+    } catch (e) {
+      toast(t('err.parse'), 'err');
+      return;
+    }
+    const name = decodeURIComponent(url.split('/').pop().split('#')[0].split('?')[0]) || 'remote.dat';
+    const blob = new Blob([buf], { type: 'application/octet-stream' });
+    const file = new File([blob], name);
+    await openFile(file);
   }
 
   // ── boot ────────────────────────────────────────────────────────────────────
@@ -3564,6 +4321,11 @@ window.App = (function (ns) {
     wire();
     refreshButtons();
     setTimeout(() => refs.shade.remove(), 400);
+    restoreSnapshot();
+    try {
+      const m = location.hash.match(/^#file=(.+)$/);
+      if (m && m[1]) await loadFromUrl(m[1]);
+    } catch (e) { /* ignore */ }
   }
 
   A.refreshAll = refreshAll;
@@ -3588,6 +4350,12 @@ window.App = (function (ns) {
 
 window.addEventListener('DOMContentLoaded', () => {
   window.App.boot();
+  // PWA: register service worker (http(s) only; file:// has no SW)
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    try {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    } catch (e) { /* ignore */ }
+  }
 });
 </script>
   <script src="src/codec.js"></script>
@@ -3637,6 +4405,7 @@ window.addEventListener('DOMContentLoaded', () => {
       <button id="btn-hex" title="Toggle hex view" class="active" data-i18n="btn.hex" data-i18n-title="btn.hex.title"># Hex</button>
       <button id="btn-smart" title="Smart views for structures/inventories" class="active" data-i18n="btn.smart" data-i18n-title="btn.smart.title">✲ Smart</button>
       <button id="btn-theme" title="Toggle theme" data-i18n-title="btn.theme.title">🌓</button>
+      <button id="btn-types" title="Toggle localized type names" data-i18n-title="btn.types.title">Aa</button>
     </div>
     <div id="search-wrap">
       <select id="lang-select" aria-label="Language"></select>
@@ -3646,6 +4415,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   <main id="layout">
     <section id="tree-pane">
+      <div id="chunk-tabs" class="hidden"></div>
       <div id="tree" tabindex="0"></div>
       <div id="empty-state">
         <div class="es-big" data-i18n="empty.big">No file loaded</div>
@@ -3670,5 +4440,6 @@ window.addEventListener('DOMContentLoaded', () => {
   </footer>
 
   <input type="file" id="file-input" multiple hidden />
+  <input type="file" id="file-compare" hidden />
 </body>
 </html>

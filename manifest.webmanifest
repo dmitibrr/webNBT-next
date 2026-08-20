@@ -1,0 +1,12 @@
+{
+  "name": "webNBT · NBT editor",
+  "short_name": "webNBT",
+  "description": "Edit Minecraft NBT files in your browser",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#16181d",
+  "theme_color": "#16181d",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

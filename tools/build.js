@@ -7,7 +7,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const SRC = path.join(ROOT, 'web-app');
-const DIST = path.join(ROOT, 'dist');
+const DIST = process.argv[2] || path.join(ROOT, 'dist');
 
 const SCRIPT_ORDER = [
   'src/model.js', 'src/codec.js', 'src/format.js', 'src/region.js', 'src/mcdata.js',

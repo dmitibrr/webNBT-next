@@ -18,12 +18,24 @@ Edit Minecraft NBT files (level.dat, player data, schematics, structure blocks, 
 - **Live hex view**, search across tags, drag & drop reordering, context menus, keyboard shortcuts (Ctrl+O/S/Z/Y, Del), undo/redo history, dark & light themes.
 - **Fully offline** — no CDN, no external requests. Works from `file://`, any static host, or as a single HTML file.
 
+## Releases
+
+Every release ships ready-to-use builds as GitHub Assets:
+
+| Channel | Tag | Artifacts |
+| --- | --- | --- |
+| **Stable** | `v1.0.0` and later | `webnbt-next-vX.Y.Z.zip` (folder build) + `webnbt.html` (single file) |
+| **Pre-release / beta** | `vX.Y.Z-beta.N` | same artifacts, marked "Pre-release" on GitHub |
+
+Download from the [Releases page](https://github.com/dmitibrr/webNBT-next/releases), unzip, and open `index.html` (or the single `webnbt.html`) — no install, fully offline.
+
 ## Quick start
 
 | Build | How |
 | --- | --- |
-| Folder build | open `dist/index.html` in any modern browser |
+| Folder build | open `dist/index.html` in any modern browser (committed in the repo) |
 | Single file | open `dist/webnbt.html` (everything inline, ~200 KB) — share it anywhere |
+| Release asset | grab the zip from [Releases](https://github.com/dmitibrr/webNBT-next/releases) |
 | Dev | open `web-app/index.html` directly |
 
 Works in Chrome, Edge, Firefox and Safari (needs `CompressionStream`, `BigInt`, `File`).
@@ -52,17 +64,20 @@ node tools/build.js
 node /tmp/opencode/smoke-test.js   # jsdom-based UI smoke test
 ```
 
+`dist/` is committed to the repo, so the Quick start works straight from a clone; rebuild it whenever `web-app/` changes.
+
 ### Layout
 
 ```
 web-app/            dev app (file:// friendly)
-  index.html        UI shell
+  index.html        UI shell (loads NBT.js + src/*.js)
   style/app.css     dark/light theme
   src/              model · codec · format · region · mcdata · treeview · inspector · app
   NBT.js            built wasm codec (createNBTModule)
 nbt-utils/          C++ codec sources (decode/encode via base64, WASM_BIGINT)
 tools/build.js      dist builder (no deps)
-dist/               generated: index.html folder build + webnbt.html single-file
+tools/deploy.sh     gh-pages publisher
+dist/               committed build: index.html folder build + webnbt.html single-file
 ```
 
 ## Architecture
@@ -79,6 +94,23 @@ npm run deploy        # builds dist/ and pushes it to the gh-pages branch
 ```
 
 (The gh-pages branch contains only `dist/` contents plus `.nojekyll`.)
+
+## Making a release
+
+```sh
+node tools/build.js                                  # refresh dist/
+git add -A && git commit -m "release v1.2.0"         # bump version first
+git push origin master
+
+git tag v1.2.0 && git push origin v1.2.0             # stable tag
+# or for a beta:
+git tag v1.2.0-beta.1 && git push origin v1.2.0-beta.1
+
+# attach dist/ as release assets (single file + zip) via the GitHub UI
+# or: gh release create v1.2.0 dist/webnbt.html "dist/zip" --notes "..."
+```
+
+Mark beta tags as **Pre-release** on the GitHub Releases page so they sort below stable releases.
 
 ## License
 

@@ -17,7 +17,7 @@ Edit Minecraft NBT files (level.dat, player data, schematics, structure blocks, 
 - **Smart structure views** — recognize BlockEntity / ItemStack / Inventory / StructureData blocks (legacy numeric block palette for `BlockID` → name).
 - **Live hex view**, search across tags, drag & drop reordering, context menus, keyboard shortcuts (Ctrl+O/S/Z/Y, Del), undo/redo history, dark & light themes.
 - **Fully offline** — no CDN, no external requests. Works from `file://`, any static host, or as a single HTML file.
-- **5 UI languages** — English, Español, Русский, 中文, 日本語 (auto-detected from your browser; switch anytime in the top bar, persisted in `localStorage`).
+- **5 UI languages** — English, Español, Русский, 中文, 日本語 (auto-detected from your browser; switch anytime in the top bar, persisted in `localStorage`). All five are LTR scripts, so the layout is designed **left-to-right only** — RTL (Arabic / Hebrew / Persian) is a conscious non-goal for now.
 
 ## Releases
 

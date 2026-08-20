@@ -8,10 +8,12 @@ cd "$ROOT"
 
 ORIGIN=$(git remote get-url origin)
 BRANCH=gh-pages
+TMPD=$(mktemp -d)
 
-# build first — tools/ exists only on master
-echo "▶ building dist/…"
-node tools/build.js
+# build into a temp dir — dist/ is tracked on master and would be removed
+# by the branch switch, so we must not depend on it in the working tree
+echo "▶ building dist/ into temp…"
+node tools/build.js "$TMPD"
 
 # stash any uncommitted source changes so the branch switch is clean
 git stash --include-untracked --keep-index 2>/dev/null || true
@@ -24,16 +26,19 @@ else
   git checkout --orphan "$BRANCH"
 fi
 
-# drop tracked files only — untracked dist/ survives the switch
+# drop all tracked files (switch left the branch's own tree)
 git rm -rfq . 2>/dev/null || true
 
 # replace root contents with the fresh build
-cp -r dist/. .
+cp -r "$TMPD/." .
 
 git add -A
 git commit -m "deploy: webNBT-next gh-pages build" --allow-empty
 echo "▶ pushing to $ORIGIN ($BRANCH)…"
-git push "$ORIGIN" "$BRANCH"
+# gh-pages is a deploy-artifact branch — force-push is expected
+git push --force "$ORIGIN" "$BRANCH"
+
+rm -rf "$TMPD"
 
 git checkout master 2>/dev/null || true
 git stash pop 2>/dev/null || true

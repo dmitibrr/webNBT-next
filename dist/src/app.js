@@ -1,5 +1,6 @@
 /* ─────────────────────────────────────────────────────────────────────────────
  * app.js — application shell: documents, history, toolbar, menus, region.
+ * Multi-document: A.docs[] holds every open doc; A.doc is the active one.
  * ───────────────────────────────────────────────────────────────────────────── */
 
 window.App = (function (ns) {
@@ -8,15 +9,21 @@ window.App = (function (ns) {
   const t = ns.t, tpl = ns.tpl;
 
   const A = {
-    doc: null,          // { kind:'nbt'|'chunk', filename, model, mode, region?, x?, z?, compression? }
-    region: null,       // { container, filename } for open region documents
-    hist: [], future: [],
+    docs: [],          // all open docs (tabs)
+    doc: null,         // active doc
     clipboard: null,
-    selectedPath: null,
-    openChunks: [],          // chunk docs opened from a region: { doc, x, z }
     hexOn: true, smartOn: true, theme: 'dark',
     inspector: null, tree: null,
+    diffResults: null, diffFilename: null,
   };
+
+  // Accessors bound to the active doc so callers keep working unchanged.
+  Object.defineProperties(A, {
+    hist: { get() { return A.doc ? A.doc.hist : []; }, set(v) { if (A.doc) A.doc.hist = v; } },
+    future: { get() { return A.doc ? A.doc.future : []; }, set(v) { if (A.doc) A.doc.future = v; } },
+    selectedPath: { get() { return A.doc ? A.doc.selectedPath : null; }, set(v) { if (A.doc) A.doc.selectedPath = v; } },
+    region: { get() { return A.doc ? A.doc.region : null; }, set(v) { if (A.doc) A.doc.region = v; } },
+  });
 
   // ── dom ─────────────────────────────────────────────────────────────────────
 
@@ -34,6 +41,97 @@ window.App = (function (ns) {
       empty: $('#empty-state'), file: $('#file-input'), drop: $('#drop-zone'),
       search: $('#search-field'), tabs: $('#chunk-tabs'), fileCompare: $('#file-compare'),
     };
+  }
+
+  // ── docs / tabs ─────────────────────────────────────────────────────────────
+
+  function newDoc(kind, data) {
+    return Object.assign({ kind, hist: [], future: [], selectedPath: null, openPaths: new Set(['']) }, data);
+  }
+
+  function tabLabel(doc) {
+    if (doc.kind === 'chunk') return 'r.' + doc.x + '.' + doc.z;
+    if (doc.kind === 'region') return '🗺 ' + doc.filename;
+    return doc.filename || '—';
+  }
+
+  function setActive(doc) {
+    A.doc = doc;
+    A.tree.openPaths = new Set(doc.openPaths || ['']);
+    refs.empty.classList.add('hidden');
+    refs.tree.classList.remove('hidden');
+    A.refreshStatus();
+    refreshAll();
+    renderTabs();
+  }
+
+  function switchDoc(next) {
+    if (!next || next === A.doc) { renderTabs(); return; }
+    if (A.doc) A.doc.openPaths = new Set(A.tree.openPaths);
+    setActive(next);
+  }
+
+  function openDoc(doc) {
+    const same = A.docs.find((d) => d.filename === doc.filename && d.kind === doc.kind);
+    if (same) { switchDoc(same); return same; }
+    A.docs.push(doc);
+    switchDoc(doc);
+    return doc;
+  }
+
+  function closeDoc(i) {
+    const doc = A.docs[i];
+    if (!doc) return;
+    const wasActive = A.doc === doc;
+    A.docs.splice(i, 1);
+    if (wasActive) {
+      if (A.docs.length) setActive(A.docs[Math.max(0, i - 1)]);
+      else showEmpty();
+    } else renderTabs();
+  }
+
+  function showEmpty() {
+    A.doc = null;
+    refs.tree.classList.add('hidden');
+    refs.empty.classList.remove('hidden');
+    refs.inspector.innerHTML = '<div class="panel-empty">' + t('panel.empty') + '</div>';
+    refs.hex.textContent = '';
+    A.hexBytes = null; A.hexRanges = null;
+    A.refreshStatus();
+    refreshButtons();
+    renderTabs();
+  }
+
+  function renderTabs() {
+    const box = refs.tabs;
+    if (!box) return;
+    box.textContent = '';
+    if (!A.docs.length) { box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    A.docs.forEach((doc, i) => {
+      const tab = el2('button');
+      tab.className = 'chunk-tab' + (doc === A.doc ? ' active' : '');
+      tab.title = tpl('tab.switch', i + 1);
+      tab.onclick = () => switchDoc(doc);
+      const label = el2('span');
+      label.className = 'tab-label';
+      label.textContent = tabLabel(doc);
+      const close = el2('span');
+      close.className = 'tab-close';
+      close.textContent = '✕';
+      close.title = t('tab.close');
+      close.onclick = (e) => { e.stopPropagation(); closeDoc(i); };
+      tab.appendChild(label);
+      tab.appendChild(close);
+      box.appendChild(tab);
+    });
+  }
+
+  function cycleDoc(dir) {
+    if (!A.docs.length) return;
+    const idx = A.docs.indexOf(A.doc);
+    const next = A.docs[(idx + dir + A.docs.length) % A.docs.length];
+    switchDoc(next);
   }
 
   // ── history ─────────────────────────────────────────────────────────────────
@@ -109,7 +207,8 @@ window.App = (function (ns) {
   // ── refresh ─────────────────────────────────────────────────────────────────
 
   function refreshAll() {
-    if (A.doc && (A.doc.kind === 'nbt' || A.doc.kind === 'chunk')) {
+    if (!A.doc) return;
+    if (A.doc.kind === 'nbt' || A.doc.kind === 'chunk') {
       A.tree.root = A.doc.model;
       refs.tree.classList.remove('hidden');
       A.refreshTree();
@@ -117,7 +216,7 @@ window.App = (function (ns) {
       updateHex();
       A.refreshStatus();
       A.refreshButtons();
-    } else if (A.doc && A.doc.kind === 'region') {
+    } else if (A.doc.kind === 'region') {
       refs.tree.classList.add('hidden');
       renderRegionGrid();
     }
@@ -129,6 +228,13 @@ window.App = (function (ns) {
     if (!A.doc || A.doc.kind === 'region') return null;
     if (!A.selectedPath) return null;
     return ns.getByPath(A.doc.model, A.selectedPath);
+  }
+
+  function selectPath(path) {
+    A.selectedPath = path;
+    if (A.tree) A.tree.select(path, true);
+    renderInspector();
+    if (A.hexOn && A.hexBytes) renderHex();
   }
 
   function renderInspector() {
@@ -146,6 +252,7 @@ window.App = (function (ns) {
         duplicate: (tag, path) => duplicateTag(tag, path),
         changeType: (tag, path) => changeTypeMenu(tag, path),
         exportSNBT: (tag, path) => exportSNBT(tag),
+        selectPath: (path) => selectPath(path),
       });
     }
     const tag = currentTag();
@@ -199,6 +306,74 @@ window.App = (function (ns) {
       parent.v.splice(Number(key), 1);
     }
     A.selectedPath = path.slice(0, -1);
+    A.refreshAll();
+  }
+
+  // ── multi-select group ops (feature: multi-select) ─────────────────────────
+
+  function selectedPaths() {
+    return A.tree ? A.tree.multiSelected().map((p) => p.concat()) : [];
+  }
+
+  function deleteMulti() {
+    const paths = selectedPaths().filter((p) => p.length > 0).sort((a, b) => b.length - a.length);
+    if (!paths.length) return;
+    pushHistory();
+    for (const p of paths) {
+      const parent = ns.getByPath(A.doc.model, p.slice(0, -1));
+      const key = p[p.length - 1];
+      if (!parent) continue;
+      if (isCompound(parent)) {
+        const i = parent.v.findIndex(([k]) => k === key);
+        if (i >= 0) parent.v.splice(i, 1);
+      } else if (isList(parent)) {
+        parent.v.splice(Number(key), 1);
+      }
+    }
+    A.selectedPath = [];
+    A.tree.clearMulti();
+    A.refreshAll();
+  }
+
+  function duplicateMulti() {
+    const paths = selectedPaths().filter((p) => p.length > 0);
+    if (!paths.length) return;
+    pushHistory();
+    const added = [];
+    for (const p of paths) {
+      const parent = ns.getByPath(A.doc.model, p.slice(0, -1));
+      const key = p[p.length - 1];
+      const tag = ns.getByPath(A.doc.model, p);
+      if (!parent || !tag) continue;
+      const copy = clone(tag);
+      if (isCompound(parent)) {
+        const name = nextFreeKey(parent, key + '_copy');
+        parent.v.push([name, copy]);
+        copy.n = name;
+        added.push(p.slice(0, -1).concat([name]));
+      } else if (isList(parent)) {
+        parent.v.splice(Number(key) + 1, 0, copy);
+        added.push(p.slice(0, -1).concat([String(Number(key) + 1)]));
+      }
+    }
+    A.selectedPath = added[0] || [];
+    A.tree.clearMulti();
+    A.refreshAll();
+  }
+
+  function renameMultiPrefix() {
+    const paths = selectedPaths().filter((p) => p.length > 0 && isCompound(ns.getByPath(A.doc.model, p.slice(0, -1))));
+    if (!paths.length) { toast(t('toast.multiOnlyCompound'), 'warn'); return; }
+    const prefix = prompt(t('multi.prefixPrompt'));
+    if (prefix === null) return;
+    pushHistory();
+    for (const p of paths) {
+      const parent = ns.getByPath(A.doc.model, p.slice(0, -1));
+      const key = p[p.length - 1];
+      const pair = parent.v.find(([k]) => k === key);
+      if (pair) pair[0] = prefix + key;
+    }
+    A.tree.clearMulti();
     A.refreshAll();
   }
 
@@ -324,10 +499,7 @@ window.App = (function (ns) {
   // Cross-window tag drop: no doc → open as new; else insert into the drop target.
   function insertExternalTag(tag, destPath, destIsContainer) {
     if (!A.doc || A.doc.kind === 'region') {
-      A.doc = { kind: 'nbt', filename: 'dropped.dat', model: clone(tag), mode: 'gzip' };
-      A.hist = []; A.future = [];
-      A.selectedPath = null;
-      refs.empty.classList.add('hidden');
+      openDoc(newDoc('nbt', { filename: 'dropped.dat', model: clone(tag), mode: 'gzip' }));
       A.refreshStatus();
       refreshAll();
       return;
@@ -359,11 +531,24 @@ window.App = (function (ns) {
     if (!tag) return;
 
     const items = [];
+    const multi = selectedPaths().length > 1;
+    if (multi) {
+      items.push({ label: t('multi.delete', selectedPaths().length), danger: true, action: deleteMulti });
+      items.push({ label: t('multi.duplicate', selectedPaths().length), action: duplicateMulti });
+      items.push({ label: t('multi.renamePrefix'), action: renameMultiPrefix });
+      items.push({ sep: true });
+    }
     if (path.length > 0) {
       items.push({ label: t('menu.rename'), key: 'F2', action: () => A.tree.beginNameEdit(path, tag) });
       items.push({ label: t('menu.duplicate'), action: () => duplicateTag(tag, path) });
       items.push({ label: t('menu.copy'), key: 'Ctrl+C', action: () => copyTag(tag) });
       if (A.clipboard) items.push({ label: t('menu.pasteAfter'), key: 'Ctrl+V', action: () => pasteAfter(path) });
+      items.push({ label: t('menu.copyPath'), key: 'Ctrl+Shift+C', action: () => copyTagPath(path) });
+      items.push({ label: t('menu.exportDat'), action: () => exportTagDat(tag) });
+      items.push({ sep: true });
+      items.push({ label: t('menu.moveUp'), key: 'Alt+↑', action: () => moveTagOrder(path, -1) });
+      items.push({ label: t('menu.moveDown'), key: 'Alt+↓', action: () => moveTagOrder(path, 1) });
+      items.push({ label: t('menu.bookmark'), action: () => toggleBookmark(path) });
     } else {
       items.push({ label: t('menu.rename'), action: () => A.tree.beginNameEdit(path, tag) });
     }
@@ -454,9 +639,19 @@ window.App = (function (ns) {
 
   function el2(tag) { return document.createElement(tag); }
 
-  // ── clipboard ───────────────────────────────────────────────────────────────
+  // ── clipboard / path ────────────────────────────────────────────────────────
 
   function copyTag(tag) { A.clipboard = clone(tag); toast(t('toast.copied', ns.typeName(tag.t))); }
+
+  function copyTagPath(path) {
+    const parts = path.map((s) => String(s));
+    const dot = parts.join('.');
+    const slash = '/' + parts.join('/');
+    const text = slash + (dot !== slash.slice(1) ? '\n' + dot : '');
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject())
+      .then(() => toast(t('toast.copiedPath', slash)))
+      .catch(() => toast(t('err.importFailed', ''), 'err'));
+  }
 
   function pasteAfter(path) {
     if (!A.doc || !A.clipboard) return;
@@ -476,19 +671,145 @@ window.App = (function (ns) {
     A.refreshAll();
   }
 
+  // move a sibling tag up/down in its parent
+  function moveTagOrder(path, dir) {
+    if (!A.doc || path.length === 0) return;
+    const parent = ns.getByPath(A.doc.model, path.slice(0, -1));
+    const key = path[path.length - 1];
+    let idx;
+    if (isCompound(parent)) idx = parent.v.findIndex(([k]) => k === key);
+    else if (isList(parent)) idx = Number(key);
+    else return;
+    if (idx < 0) return;
+    const to = idx + dir;
+    if (isCompound(parent)) {
+      if (to < 0 || to >= parent.v.length) return;
+      pushHistory();
+      const [a, b] = [parent.v[idx], parent.v[to]];
+      parent.v[idx] = b; parent.v[to] = a;
+    } else {
+      if (to < 0 || to >= parent.v.length) return;
+      pushHistory();
+      const [a, b] = [parent.v[idx], parent.v[to]];
+      parent.v[idx] = b; parent.v[to] = a;
+    }
+    A.selectedPath = path;
+    A.refreshAll();
+    if (A.tree) A.tree.select(path, true);
+  }
+
+  // ── bookmarks ───────────────────────────────────────────────────────────────
+
+  const BM_KEY = 'webnbt-bookmarks';
+  function loadBookmarks() { try { return JSON.parse(localStorage.getItem(BM_KEY) || '[]'); } catch (e) { return []; } }
+  function saveBookmarks(arr) { try { localStorage.setItem(BM_KEY, JSON.stringify(arr)); } catch (e) {} }
+  function isBookmarked(path) { return loadBookmarks().indexOf(path.join('\u001f')) >= 0; }
+  function toggleBookmark(path) {
+    const key = path.join('\u001f');
+    const arr = loadBookmarks();
+    const i = arr.indexOf(key);
+    if (i >= 0) { arr.splice(i, 1); toast(t('toast.unbookmarked')); }
+    else { arr.push(key); toast(t('toast.bookmarked')); }
+    saveBookmarks(arr);
+  }
+
+  // ── export selected tag as .dat ─────────────────────────────────────────────
+
+  async function exportTagDat(tag) {
+    try {
+      const bytes = await ns.codec.compileModel(tag, A.doc.mode || 'gzip');
+      ns.codec.download(bytes, (tag.n || 'tag').replace(/[^\w.-]+/g, '_') + '.dat');
+      toast(t('toast.saved', (tag.n || 'tag') + '.dat'));
+    } catch (e) { toast(t('err.importFailed', String(e)), 'err'); }
+  }
+
+  // ── go to path/offset ───────────────────────────────────────────────────────
+
+  function goToPath() {
+    if (!A.doc || A.doc.kind === 'region') return;
+    const raw = prompt(t('goto.pathPrompt'));
+    if (!raw) return;
+    let path = null;
+    const norm = raw.replace(/^\/+|\/+$/g, '');
+    if (norm) {
+      path = norm.split('/').map((s) => /^\d+$/.test(s) ? Number(s) : s);
+    }
+    // resolve
+    let cur = path ? ns.getByPath(A.doc.model, path) : A.doc.model;
+    if (cur === undefined) {
+      // try dot notation
+      const alt = norm.split('.').map((s) => /^\d+$/.test(s) ? Number(s) : s);
+      cur = ns.getByPath(A.doc.model, alt);
+      if (cur !== undefined) path = alt;
+    }
+    if (cur === undefined) { toast(t('goto.notFound'), 'err'); return; }
+    selectPath(path || []);
+  }
+
+  function goToOffset() {
+    if (!A.hexBytes) { toast(t('goto.noHex'), 'warn'); return; }
+    const raw = prompt(t('goto.offsetPrompt'));
+    if (!raw) return;
+    const n = parseInt(raw.trim(), 16);
+    if (isNaN(n)) { toast(t('goto.notFound'), 'err'); return; }
+    if (n < 0 || n >= A.hexBytes.length) { toast(t('goto.notFound'), 'err'); return; }
+    onHexClick(n);
+  }
+
+  // ── collapse / expand all ───────────────────────────────────────────────────
+
+  function collapseAll() {
+    if (!A.tree) return;
+    A.tree.openPaths = new Set([]);
+    A.tree.refresh();
+  }
+  function expandAll() {
+    if (!A.tree) return;
+    const set = new Set(['']);
+    const walk = (tag, path) => {
+      if (isCompound(tag) || isList(tag)) set.add(path.join('\u001f'));
+      if (isCompound(tag)) for (const [k, c] of tag.v) { path.push(k); walk(c, path); path.pop(); }
+      else if (isList(tag)) for (let i = 0; i < tag.v.length; i++) { path.push(i); walk(tag.v[i], path); path.pop(); }
+    };
+    walk(A.doc && A.doc.model, []);
+    A.tree.openPaths = set;
+    A.tree.refresh();
+  }
+
+  // ── typed tag creation shortcuts (Alt+B/S/I/L/…) ───────────────────────────
+
+  const ALT_TYPE = { b: 1, s: 8, i: 3, l: 4, f: 5, d: 6, t: 10, n: 11, a: 7, g: 12, e: 9 };
+  function addTypedTag(type) {
+    if (!A.doc) return;
+    const path = A.selectedPath || [];
+    const target = ns.getByPath(A.doc.model, path);
+    const container = target && (isCompound(target) || isList(target)) ? target : parentOf(path);
+    if (!container) return;
+    pushHistory();
+    if (isCompound(container)) {
+      const name = nextFreeKey(container, ns.typeName(type).toLowerCase());
+      const c = ns.createTag(type, name);
+      container.v.push([name, c]);
+      A.selectedPath = path.concat([name]);
+    } else if (isList(container)) {
+      if (container.et !== T.End && container.et !== type) { toast(t('toast.cannotMove', ns.typeName(type), ns.typeName(container.et)), 'err'); return; }
+      if (container.et === T.End) container.et = type;
+      const c = ns.createTag(type, '');
+      container.v.push(c);
+      A.selectedPath = path.concat([String(container.v.length - 1)]);
+    }
+    A.refreshAll();
+    if (A.tree) A.tree.select(A.selectedPath, true);
+  }
+
   // ── files ───────────────────────────────────────────────────────────────────
 
   async function openFile(file) {
     const buf = new Uint8Array(await file.arrayBuffer());
     // region probe
     if (ns.region.probe(buf) || /\.(mca|mcr)$/i.test(file.name)) {
-      A.region = { container: ns.region.create(buf), filename: file.name };
-      A.doc = { kind: 'region', filename: file.name };
-      A.openChunks = [];
-      renderChunkTabs();
-      refs.empty.classList.add('hidden');
-      A.refreshStatus();
-      refreshAll();
+      const region = { container: ns.region.create(buf), filename: file.name };
+      openDoc(newDoc('region', { filename: file.name, region }));
       return;
     }
     const loaded = await ns.codec.loadBuffer(buf);
@@ -496,14 +817,7 @@ window.App = (function (ns) {
       toast(t('err.parse'), 'err');
       return;
     }
-    A.doc = {
-      kind: 'nbt', filename: file.name, model: loaded.res.root, mode: loaded.mode,
-    };
-    A.hist = []; A.future = [];
-    A.selectedPath = null;
-    refs.empty.classList.add('hidden');
-    A.refreshStatus();
-    refreshAll();
+    openDoc(newDoc('nbt', { filename: file.name, model: loaded.res.root, mode: loaded.mode }));
     addRecent(file.name);
     if ((loaded.res.errors || []).length) {
       toast(t('warn.parseIssues', loaded.res.errors.length), 'warn');
@@ -520,9 +834,7 @@ window.App = (function (ns) {
     }
     if (A.doc.kind === 'chunk' && A.doc.region) {
       // write back to region container (dirty chunk)
-      if (A.doc.region && A.doc.region.container) {
-        A.doc.region.container.setChunkModel(A.doc.x, A.doc.z, A.doc.model, 2);
-      }
+      A.doc.region.setChunkModel(A.doc.x, A.doc.z, A.doc.model, 2);
       toast(t('toast.stagedChunk', A.doc.x, A.doc.z), 'warn');
       return;
     }
@@ -536,40 +848,12 @@ window.App = (function (ns) {
   }
 
   function openChunkDoc(model, x, z) {
-    const doc = { kind: 'chunk', filename: x + '.' + z + '.nbt', model, mode: 'zlib', region: A.region ? A.region.container : null, x, z };
-    // register tab (dedupe by x,z)
-    const existing = A.openChunks.findIndex((c) => c.x === x && c.z === z);
-    const entry = { x, z, doc };
-    if (existing >= 0) A.openChunks[existing] = entry;
-    else A.openChunks.push(entry);
-    switchChunk(entry);
-  }
-
-  function switchChunk(entry) {
-    A.doc = entry.doc;
-    A.hist = []; A.future = [];
-    A.selectedPath = null;
-    refs.tree.classList.remove('hidden');
-    A.refreshStatus();
-    refreshAll();
-    renderChunkTabs();
-  }
-
-  function renderChunkTabs() {
-    const t = refs.tabs;
-    if (!t) return;
-    t.textContent = '';
-    if (!A.openChunks.length) { t.classList.add('hidden'); return; }
-    t.classList.remove('hidden');
-    for (let i = 0; i < A.openChunks.length; i++) {
-      const c = A.openChunks[i];
-      const tab = el2('button');
-      tab.className = 'chunk-tab' + (A.doc && A.doc.x === c.x && A.doc.z === c.z ? ' active' : '');
-      tab.textContent = 'r.' + c.x + '.' + c.z + ' · ' + (i + 1);
-      tab.title = 'Alt+' + (i + 1);
-      tab.onclick = () => switchChunk(c);
-      t.appendChild(tab);
-    }
+    const container = A.region && A.region.container ? A.region.container : A.region;
+    const doc = newDoc('chunk', { filename: x + '.' + z + '.nbt', model, mode: 'zlib', region: container, x, z });
+    const existing = A.docs.find((d) => d.kind === 'chunk' && d.x === x && d.z === z && d.region === container);
+    if (existing) { switchDoc(existing); return; }
+    A.docs.push(doc);
+    switchDoc(doc);
   }
 
   // ── recent files (menu) ─────────────────────────────────────────────────────
@@ -683,13 +967,9 @@ window.App = (function (ns) {
     saveBtn.textContent = t('region.saveBtn');
     saveBtn.style.marginTop = '12px';
     saveBtn.onclick = async () => {
-      if (A.doc.kind === 'chunk') {
-        A.region.container.setChunkModel(A.doc.x, A.doc.z, A.doc.model, 2);
-        A.doc = { kind: 'region', filename: A.region.filename };
-        A.openChunks = [];
-        renderChunkTabs();
-        refreshAll();
-        await new Promise((r) => setTimeout(r, 30));
+      if (A.doc.kind === 'chunk' && A.doc.region) {
+        A.doc.region.setChunkModel(A.doc.x, A.doc.z, A.doc.model, 2);
+        toast(t('toast.stagedChunk', A.doc.x, A.doc.z), 'warn');
       }
       const bytes = await A.region.container.pack();
       ns.codec.download(bytes, A.region.filename);
@@ -779,7 +1059,11 @@ window.App = (function (ns) {
 
   function refreshStatus() {
     const s = refs.status;
-    if (!A.doc) return;
+    if (!A.doc) {
+      s.file.textContent = '—'; s.mode.textContent = ''; s.count.textContent = '';
+      s.errors.textContent = ''; s.history.textContent = '';
+      return;
+    }
     s.file.textContent = A.doc.filename || '—';
     if (A.doc.kind === 'region') {
       s.mode.textContent = tpl('status.region', A.region.container.listChunks().length);
@@ -869,23 +1153,13 @@ window.App = (function (ns) {
     const text = await file.text();
     try {
       const tag = ns.parseSNBT(text);
-      A.doc = { kind: 'nbt', filename: file.name.replace(/\.(snbt|txt|nbt)$/i, '.dat'), model: tag, mode: 'gzip' };
-      A.hist = []; A.future = [];
-      A.selectedPath = null;
-      refs.empty.classList.add('hidden');
-      A.refreshStatus();
-      refreshAll();
+      openDoc(newDoc('nbt', { filename: file.name.replace(/\.(snbt|txt|nbt)$/i, '.dat'), model: tag, mode: 'gzip' }));
       toast(t('toast.importedSNBT'));
     } catch (e) {
       try {
         const obj = JSON.parse(text);
         const tag = ns.fromJSON(obj);
-        A.doc = { kind: 'nbt', filename: file.name.replace(/\.json$/i, '.dat'), model: tag, mode: 'gzip' };
-        A.hist = []; A.future = [];
-        A.selectedPath = null;
-        refs.empty.classList.add('hidden');
-        A.refreshStatus();
-        refreshAll();
+        openDoc(newDoc('nbt', { filename: file.name.replace(/\.json$/i, '.dat'), model: tag, mode: 'gzip' }));
         toast(t('toast.importedJSON'));
       } catch (e2) {
         toast(t('err.importFailed', e.message), 'err');
@@ -929,9 +1203,47 @@ window.App = (function (ns) {
 
   // ── theme ───────────────────────────────────────────────────────────────────
 
+  const THEMES = ['dark', 'light', 'sepia', 'gruvbox', 'contrast'];
   function applyTheme() {
     document.documentElement.dataset.theme = A.theme;
     try { localStorage.setItem('webnbt-theme', A.theme); } catch (e) {}
+  }
+
+  function showThemeMenu(x, y) {
+    const items = THEMES.map((th) => ({
+      label: t('theme.' + th),
+      action: () => { A.theme = th; applyTheme(); },
+    }));
+    items.push({ sep: true });
+    items.push({
+      label: t('theme.accent'),
+      submenu: [['#4da3ff', '#1f6feb', '#3fb950', '#d29922', '#f85149', '#b483ff', '#00b8a9', '#f0c674'].map((c) => ({
+        label: '■ ' + c, icon: '<span class="icon" style="color:' + c + '">■</span>',
+        action: () => {
+          document.documentElement.style.setProperty('--accent', c);
+          try { localStorage.setItem('webnbt-accent', c); } catch (e) {}
+        },
+      }))],
+    });
+    items.push({ sep: true });
+    items.push({
+      label: t('theme.resetAccent'),
+      action: () => {
+        document.documentElement.style.removeProperty('--accent');
+        try { localStorage.removeItem('webnbt-accent'); } catch (e) {}
+      },
+    });
+    showMenu(x, y, items);
+  }
+
+  // ── autosave ────────────────────────────────────────────────────────────────
+
+  let autosaveTimer = null;
+  function startAutosave() {
+    if (autosaveTimer) return;
+    autosaveTimer = setInterval(() => {
+      if (A.doc && A.doc.kind !== 'region') saveSnapshot('webnbt-autosave');
+    }, 120000);
   }
 
   // ── events ──────────────────────────────────────────────────────────────────
@@ -941,10 +1253,18 @@ window.App = (function (ns) {
     $('#btn-save').onclick = saveDoc;
     $('#btn-undo').onclick = () => { undo(); A.refreshButtons && A.refreshButtons(); };
     $('#btn-redo').onclick = () => { redo(); };
-    $('#btn-delete').onclick = () => A.selectedPath && deleteTag(A.selectedPath);
+    $('#btn-delete').onclick = () => {
+      if (A.tree && A.tree.multiSel && A.tree.multiSel.size) { deleteMulti(); return; }
+      A.selectedPath && deleteTag(A.selectedPath);
+    };
     $('#btn-duplicate').onclick = () => {
+      if (A.tree && A.tree.multiSel && A.tree.multiSel.size) { duplicateMulti(); return; }
       const tag = currentTag();
       if (tag && A.selectedPath) duplicateTag(tag, A.selectedPath);
+    };
+    $('#btn-history').onclick = (e) => {
+      const r = e.target.getBoundingClientRect();
+      showHistoryMenu(r.left, r.bottom);
     };
     $('#btn-add').onclick = () => { const p = A.selectedPath || []; addTag(p); };
     $('#btn-hex').onclick = (e) => {
@@ -959,9 +1279,9 @@ window.App = (function (ns) {
       e.target.classList.toggle('active', A.smartOn);
       renderInspector();
     };
-    $('#btn-theme').onclick = () => {
-      A.theme = A.theme === 'dark' ? 'light' : 'dark';
-      applyTheme();
+    $('#btn-theme').onclick = (e) => {
+      const r = e.target.getBoundingClientRect();
+      showThemeMenu(r.left, r.bottom);
     };
     $('#btn-types').onclick = (e) => {
       const on = !ns.I18N.localizeTypes;
@@ -971,6 +1291,13 @@ window.App = (function (ns) {
     $('#btn-export').onclick = (e) => {
       const r = e.target.getBoundingClientRect();
       showFormatsMenu(r.left, r.bottom);
+    };
+    $('#btn-collapse').onclick = collapseAll;
+    $('#btn-expand').onclick = expandAll;
+    $('#btn-goto').onclick = goToPath;
+    $('#btn-bookmarks').onclick = (e) => {
+      const r = e.target.getBoundingClientRect();
+      showBookmarksMenu(r.left, r.bottom);
     };
 
     refs.file.addEventListener('change', (e) => {
@@ -1017,18 +1344,31 @@ window.App = (function (ns) {
         return;
       }
       const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.key.toLowerCase() === 'o') { e.preventDefault(); refs.file.click(); }
-      else if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); saveDoc(); }
-      else if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
-      else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
-      else if (mod && e.key.toLowerCase() === 'c') { const t = currentTag(); if (t) copyTag(t); }
-      else if (mod && e.key.toLowerCase() === 'v') { if (A.selectedPath) pasteAfter(A.selectedPath); }
-      else if (e.altKey && /^[1-9]$/.test(e.key) && A.openChunks.length) {
+      const k = e.key.toLowerCase();
+      if (mod && k === 'o') { e.preventDefault(); refs.file.click(); }
+      else if (mod && k === 's') { e.preventDefault(); saveDoc(); }
+      else if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+      else if (mod && k === 'y') { e.preventDefault(); redo(); }
+      else if (mod && k === 'c' && e.shiftKey) { e.preventDefault(); if (A.selectedPath) copyTagPath(A.selectedPath); }
+      else if (mod && k === 'c') { const t = currentTag(); if (t) copyTag(t); }
+      else if (mod && k === 'v') { if (A.selectedPath) pasteAfter(A.selectedPath); }
+      else if (mod && k === 'p') { e.preventDefault(); goToPath(); }
+      else if (mod && k === 'g') { e.preventDefault(); goToOffset(); }
+      else if (mod && e.key === 'Tab') { e.preventDefault(); cycleDoc(e.shiftKey ? -1 : 1); }
+      else if (mod && k === '[') { e.preventDefault(); collapseAll(); }
+      else if (mod && k === ']') { e.preventDefault(); expandAll(); }
+      else if (e.altKey && /^[1-9]$/.test(e.key) && A.docs.length) {
         e.preventDefault();
         const i = Number(e.key) - 1;
-        if (A.openChunks[i]) switchChunk(A.openChunks[i]);
+        if (A.docs[i]) switchDoc(A.docs[i]);
       }
-      else if (e.key === 'Delete' || e.key === 'Backspace') { if (A.selectedPath && A.selectedPath.length) deleteTag(A.selectedPath); }
+      else if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); if (A.selectedPath) moveTagOrder(A.selectedPath, -1); }
+      else if (e.altKey && e.key === 'ArrowDown') { e.preventDefault(); if (A.selectedPath) moveTagOrder(A.selectedPath, 1); }
+      else if (e.altKey && ALT_TYPE[k]) { e.preventDefault(); addTypedTag(ALT_TYPE[k]); }
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (A.tree && A.tree.multiSel && A.tree.multiSel.size) deleteMulti();
+        else if (A.selectedPath && A.selectedPath.length) deleteTag(A.selectedPath);
+      }
       else if (e.key === 'F2') { if (A.selectedPath) { const t = currentTag(); if (t) A.tree.beginNameEdit(A.selectedPath, t); } }
       else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         // basic navigation: select next/prev visible node
@@ -1044,20 +1384,23 @@ window.App = (function (ns) {
     });
 
     // theme init
-    try { const saved = localStorage.getItem('webnbt-theme'); if (saved) A.theme = saved; } catch (e2) {}
+    try { const saved = localStorage.getItem('webnbt-theme'); if (saved && THEMES.indexOf(saved) >= 0) A.theme = saved; } catch (e2) {}
     applyTheme();
+    try {
+      const accent = localStorage.getItem('webnbt-accent');
+      if (accent) document.documentElement.style.setProperty('--accent', accent);
+    } catch (e2) {}
 
-    window.addEventListener('beforeunload', saveSnapshot);
-    window.addEventListener('pagehide', saveSnapshot);
+    window.addEventListener('beforeunload', () => saveSnapshot('webnbt-session'));
+    window.addEventListener('pagehide', () => saveSnapshot('webnbt-session'));
+    startAutosave();
   }
 
   // ── session snapshot (beforeunload → restore) ───────────────────────────────
 
-  const SNAP_KEY = 'webnbt-session';
-
-  function saveSnapshot() {
+  function saveSnapshot(key) {
     try {
-      if (!A.doc || A.doc.kind === 'region') { localStorage.removeItem(SNAP_KEY); return; }
+      if (!A.doc || A.doc.kind === 'region') { localStorage.removeItem(key); return; }
       const snap = {
         filename: A.doc.filename,
         model: A.doc.model,
@@ -1069,26 +1412,76 @@ window.App = (function (ns) {
       };
       const s = JSON.stringify(snap, (k, v) => typeof v === 'bigint' ? v.toString() + 'n' : v);
       if (s.length > 2 * 1024 * 1024) return; // skip oversized
-      localStorage.setItem(SNAP_KEY, s);
+      localStorage.setItem(key, s);
     } catch (e) { /* ignore */ }
   }
 
   function restoreSnapshot() {
-    try {
-      const s = localStorage.getItem(SNAP_KEY);
-      if (!s) return false;
-      localStorage.removeItem(SNAP_KEY);
-      const snap = JSON.parse(s, (k, v) => typeof v === 'string' && /^-?\d+n$/.test(v) ? BigInt(v.slice(0, -1)) : v);
-      if (!snap || !snap.model) return false;
-      A.doc = { kind: 'nbt', filename: snap.filename || 'restored.dat', model: snap.model, mode: snap.mode || 'gzip' };
-      A.hist = snap.hist || []; A.future = snap.future || [];
-      A.selectedPath = snap.selected || null;
-      refs.empty.classList.add('hidden');
-      A.refreshStatus();
-      refreshAll();
-      toast('♻ ' + (snap.filename || 'Session'));
-      return true;
-    } catch (e) { /* ignore */ }
+    const keys = ['webnbt-session', 'webnbt-autosave'];
+    for (const key of keys) {
+      try {
+        const s = localStorage.getItem(key);
+        if (!s) continue;
+        localStorage.removeItem(key);
+        const snap = JSON.parse(s, (k, v) => typeof v === 'string' && /^-?\d+n$/.test(v) ? BigInt(v.slice(0, -1)) : v);
+        if (!snap || !snap.model) continue;
+        openDoc(newDoc('nbt', { filename: snap.filename || 'restored.dat', model: snap.model, mode: snap.mode || 'gzip' }));
+        A.hist = snap.hist || []; A.future = snap.future || [];
+        A.selectedPath = snap.selected || null;
+        toast('♻ ' + (snap.filename || 'Session'));
+        return true;
+      } catch (e) { /* ignore */ }
+    }
+    return false;
+  }
+
+  // ── bookmarks menu ──────────────────────────────────────────────────────────
+
+  function showBookmarksMenu(x, y) {
+    const arr = loadBookmarks();
+    if (!arr.length) { toast(t('toast.noBookmarks'), 'warn'); return; }
+    const items = arr.map((key) => {
+      const path = key ? key.split('\u001f') : [];
+      return {
+        label: '/' + path.map((s) => String(s)).join('/') || '(root)',
+        action: () => {
+          if (A.doc && ns.getByPath(A.doc.model, path) !== undefined) selectPath(path);
+          else toast(t('toast.bmMissing'), 'warn');
+        },
+      };
+    });
+    items.push({ sep: true });
+    items.push({ label: t('bookmarks.clear'), danger: true, action: () => { saveBookmarks([]); toast(t('toast.bmCleared')); } });
+    showMenu(x, y, items);
+  }
+
+  // ── history panel (click a past state to revert) ──────────────────────────
+
+  function showHistoryMenu(x, y) {
+    if (!A.doc || A.doc.kind === 'region') return;
+    const hist = A.hist;
+    const items = [];
+    const snapCount = Math.min(20, hist.length);
+    for (let i = 0; i < snapCount; i++) {
+      const idx = hist.length - 1 - i;
+      const label = t('history.entry', idx + 1);
+      items.push({
+        label: label + (i === 0 ? ' — ' + t('history.undo') : ''),
+        action: () => revertTo(idx),
+      });
+    }
+    if (!items.length) { toast(t('history.empty'), 'warn'); return; }
+    items.push({ sep: true });
+    items.push({ label: t('history.clear'), danger: true, action: () => { A.hist = []; A.future = []; A.refreshHistory(); A.refreshButtons(); toast(t('history.cleared')); } });
+    showMenu(x, y, items);
+  }
+
+  function revertTo(idx) {
+    if (!A.doc || idx < 0 || idx >= A.hist.length) return;
+    A.future = A.hist.slice(idx).reverse().concat(A.future);
+    A.doc.model = A.hist[idx];
+    A.hist = A.hist.slice(0, idx);
+    A.refreshAll();
   }
 
   // ── URL file param (#file=...) ──────────────────────────────────────────────
@@ -1154,6 +1547,8 @@ window.App = (function (ns) {
     refreshStatus,
     refreshButtons,
     refreshTree: () => A.tree.refresh(),
+    get tree() { return A.tree; },
+    get doc() { return A.doc; },
   };
 })(window.NBT || {});
 

@@ -209,5 +209,54 @@ window.NBT = (function (ns) {
 
   ns.mcdata.validateChunk = validateChunk;
 
+  // ── per-value validation (ranges, known limits, coords) ─────────────────────
+  // Returns an array of human-readable warnings for a single tag.
+  function validateValue(tag, chain) {
+    const warns = [];
+    if (!tag) return warns;
+    const lastKey = chain && chain.length ? String(chain[chain.length - 1]) : '';
+
+    switch (tag.t) {
+      case T.Byte: {
+        const v = Number(tag.v);
+        if (v < -128 || v > 127) warns.push('Byte out of range: ' + v);
+        break;
+      }
+      case T.Short: {
+        const v = Number(tag.v);
+        if (v < -32768 || v > 32767) warns.push('Short out of range: ' + v);
+        break;
+      }
+      case T.Int: {
+        const v = Number(tag.v);
+        if (v < -2147483648 || v > 2147483647) warns.push('Int out of range: ' + v);
+        if (lastKey === 'Slot' && (v < -1 || v > 35)) warns.push('Slot ' + v + ' outside 0..35');
+        if (lastKey === 'Count' && (v < 1 || v > 64)) warns.push('Item Count ' + v + ' outside 1..64');
+        break;
+      }
+      case T.String: {
+        if (lastKey === 'id' && typeof tag.v === 'string' && tag.v.indexOf(':') < 0) {
+          warns.push('id "' + tag.v + '" has no namespace (expected minecraft:…)');
+        }
+        if (lastKey === 'LevelName' && tag.v.length > 0 && tag.v.length > 64) {
+          warns.push('LevelName is ' + tag.v.length + ' chars (max 64)');
+        }
+        break;
+      }
+      default: break;
+    }
+
+    // BlockPos parity check (x+z must be even for structure blocks in 1.13+)
+    if (lastKey === 'pos' && isList(tag) && tag.v.length === 3) {
+      const x = Number(tag.v[0].v), z = Number(tag.v[2].v);
+      if (!isNaN(x) && !isNaN(z) && ((x + z) & 1) !== 0) {
+        warns.push('BlockPos x+z must be even (structure placement requirement)');
+      }
+    }
+    return warns;
+  }
+
+  ns.mcdata.validateValue = validateValue;
+
   return ns;
 })(window.NBT || {});

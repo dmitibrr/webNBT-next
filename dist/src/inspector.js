@@ -48,8 +48,7 @@ window.NBT = (function (ns) {
       h2.appendChild(rn);
     }
     h.appendChild(h2);
-    const p = el('div', 'path', pathToStr(path));
-    h.appendChild(p);
+    h.appendChild(this.renderBreadcrumb(path));
 
     // smart card
     if (api.smartEnabled && !path.length === false) {
@@ -101,17 +100,49 @@ window.NBT = (function (ns) {
     const expBtn = el('button', null, t('insp.exportSNBT'));
     expBtn.onclick = () => api.exportSNBT(tag, path);
     acts.appendChild(expBtn);
+    const snbtBtn = el('button', null, 'SNBT');
+    snbtBtn.className = this._snbtOpen ? 'active' : '';
+    snbtBtn.onclick = () => {
+      this._snbtOpen = !this._snbtOpen;
+      this.render(tag, path);
+    };
+    acts.appendChild(snbtBtn);
 
     h.appendChild(acts);
+
+    // SNBT preview (feature: live preview)
+    if (this._snbtOpen) {
+      try {
+        const text = ns.toSNBT(tag, { indent: true });
+        const pre = el('pre', 'snbt-preview', text);
+        h.appendChild(pre);
+      } catch (e) {
+        h.appendChild(el('div', 'snbt-preview err', String(e)));
+      }
+    }
+
     box.appendChild(h);
   };
 
   function nameFromPath(path) {
     return path.length ? String(path[path.length - 1]) : t('insp.root');
   }
-  function pathToStr(path) {
-    return '/' + path.map((s) => String(s)).join('/');
-  }
+
+  // clickable breadcrumb path (feature: breadcrumb)
+  Inspector.prototype.renderBreadcrumb = function (path) {
+    const crumb = el('div', 'crumb');
+    const root = el('button', 'crumb-seg', t('insp.root'));
+    root.onclick = () => this.api.selectPath && this.api.selectPath([]);
+    crumb.appendChild(root);
+    for (let i = 0; i < path.length; i++) {
+      const sep = el('span', 'crumb-sep', '/');
+      crumb.appendChild(sep);
+      const seg = el('button', 'crumb-seg' + (i === path.length - 1 ? ' last' : ''), String(path[i]));
+      seg.onclick = () => this.api.selectPath && this.api.selectPath(path.slice(0, i + 1));
+      crumb.appendChild(seg);
+    }
+    return crumb;
+  };
 
   // ── scalar editors ──────────────────────────────────────────────────────────
 
@@ -175,6 +206,15 @@ window.NBT = (function (ns) {
       default: break;
     }
     f.appendChild(chips);
+
+    // Minecraft-specific value validation (ranges, coords, palette etc.)
+    const warns = ns.mcdata && ns.mcdata.validateValue && ns.mcdata.validateValue(tag, this.cur.path);
+    if (warns && warns.length) {
+      const notice = el('div', 'notice warn');
+      notice.textContent = warns.join(' · ');
+      wrap.appendChild(notice);
+    }
+
     wrap.appendChild(f);
     return wrap;
   };

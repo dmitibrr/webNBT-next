@@ -21,6 +21,17 @@ Edit Minecraft NBT files (level.dat, player data, schematics, structure blocks, 
 - **Cross-window drag & drop** — drag a tag from one tab/window and drop it into another to import it.
 - **Session restore** — your document, undo history and selection survive a reload / tab close.
 - **Chunk tabs** — every chunk opened from a region becomes a tab; switch with `Alt+1..9`.
+- **Document tabs** — open many NBT/region files side by side; switch with `Ctrl+Tab` or `Alt+1..9`, close with ✕.
+- **Multi-select** — `Ctrl+Click` tags to select a group; delete / duplicate / rename-with-prefix in one go.
+- **Bookmarks** — pin paths with the ★ button or context menu; jump back instantly (persisted).
+- **Undo history panel** — browse past states and click to revert (🕘).
+- **Clickable breadcrumbs** — the inspector path is navigable segment by segment.
+- **Copy path / export tag** — `Ctrl+Shift+C` copies a tag's path; the context menu exports any tag as a standalone `.dat`.
+- **Move tags** — `Alt+↑/↓` (or the context menu) reorder siblings; `Ctrl+P` jumps to a path, `Ctrl+G` to a hex offset; `Ctrl+[` / `Ctrl+]` collapse / expand the whole tree.
+- **Quick-create shortcuts** — `Alt+B/S/I/L/F/D/T` (and more) insert a tag of that type in the selected container.
+- **MC-aware validation** — inline warnings for out-of-range numbers, slot/count limits, namespace-less ids and BlockPos parity.
+- **Live SNBT preview** — toggle a highlighted SNBT view of the selected tag right in the inspector.
+- **Themes & accent** — dark, light, sepia, gruvbox and high-contrast, with a pickable accent color.
 - **Recent files** menu (last 8, persisted) and extra exports: raw NBT as base64, Python (`nbtlib`) snippet, SNBT-as-base64.
 - **Chunk validation** — warns before saving if palette / BlockStates / entity data looks inconsistent.
 - **Installable PWA** — manifest + service worker + icon; offline-capable on HTTPS.

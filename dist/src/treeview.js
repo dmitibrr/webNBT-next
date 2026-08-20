@@ -54,6 +54,7 @@ window.NBT = (function (ns) {
 
     this.openPaths = new Set(opts.openPaths || ['']);
     this.selectedPath = null;
+    this.multiSel = new Set();   // extra selected path keys (ctrl+click)
     this.query = '';
     this.searchResults = [];
     this.searchIdx = 0;
@@ -61,6 +62,17 @@ window.NBT = (function (ns) {
     this.el = opts.el;
     this.bindGlobal();
   }
+
+  Tree.prototype.clearMulti = function () {
+    this.multiSel.clear();
+    this.syncSelection();
+  };
+
+  Tree.prototype.multiSelected = function () {
+    const out = this.selectedPath ? [pathFromKey(this.selectedPath)] : [];
+    for (const k of this.multiSel) out.push(pathFromKey(k));
+    return out;
+  };
 
   Tree.prototype.bindGlobal = function () {
     const self = this;
@@ -79,6 +91,15 @@ window.NBT = (function (ns) {
       const node = e.target.closest('li');
       if (node) {
         const path = pathFromKey(node.dataset.path);
+        if (e.ctrlKey || e.metaKey) {
+          const key = pkey(path);
+          if (this.multiSel.has(key)) this.multiSel.delete(key);
+          else this.multiSel.add(key);
+          this.syncSelection();
+          e.stopPropagation();
+          return;
+        }
+        if (!(e.ctrlKey || e.metaKey) && this.multiSel.size) this.clearMulti();
         this.select(path, true);
         e.stopPropagation();
       }
@@ -98,7 +119,8 @@ window.NBT = (function (ns) {
       const li = e.target.closest('li');
       if (li) {
         const path = pathFromKey(li.dataset.path);
-        this.select(path, false);
+        const key = pkey(path);
+        if (!this.multiSel.has(key)) this.select(path, false);
         if (this.onContextMenu) this.onContextMenu(path, e.clientX, e.clientY);
       } else if (this.onContextMenu) {
         this.onContextMenu([], e.clientX, e.clientY);
@@ -117,10 +139,12 @@ window.NBT = (function (ns) {
 
   Tree.prototype.syncSelection = function () {
     this.el.querySelectorAll('li.selected').forEach((li) => li.classList.remove('selected'));
-    if (this.selectedPath) {
-      const li = this.el.querySelector('li[data-path="' + CSS.escape(this.selectedPath) + '"]');
+    const sel = new Set(this.multiSel || []);
+    if (this.selectedPath) sel.add(this.selectedPath);
+    sel.forEach((key) => {
+      const li = this.el.querySelector('li[data-path="' + CSS.escape(key) + '"]');
       if (li) li.classList.add('selected');
-    }
+    });
   };
 
   Tree.prototype.getAt = function (path) {

@@ -97,6 +97,8 @@ window.NBT = (function (ns) {
   // ── smart card builder ──────────────────────────────────────────────────────
 
   // Returns a render descriptor or null. chain = path keys/indices from root.
+  const t = ns.t, tpl = ns.tpl;
+
   function smartFor(tag, chain) {
     const lastKey = chain.length ? chain[chain.length - 1] : null;
 
@@ -108,15 +110,15 @@ window.NBT = (function (ns) {
       };
       const items = get(tag, 'Items');
       const inventory = isList(items) ? items.v.map(itemStackInfo) : [];
-      return { kind: 'blockEntity', title: 'Block entity', kv, inventory, tag };
+      return { kind: 'blockEntity', title: t('smart.blockEntity'), kv, inventory, tag };
     }
 
     if (looksLikeItemStack(tag)) {
-      return { kind: 'itemStack', title: 'Item stack', item: itemStackInfo(tag), tag };
+      return { kind: 'itemStack', title: t('smart.itemStack'), item: itemStackInfo(tag), tag };
     }
 
     if (looksLikeInventoryTag(tag) && (lastKey === 'Items' || lastKey === 'Inventory')) {
-      return { kind: 'inventory', title: 'Inventory (' + tag.v.length + ')', items: tag.v.map(itemStackInfo), tag };
+      return { kind: 'inventory', title: tpl('smart.inventoryCount', tag.v.length), items: tag.v.map(itemStackInfo), tag };
     }
 
     // Structure save/load "Data" compound
@@ -126,7 +128,7 @@ window.NBT = (function (ns) {
       const blocks = get(tag, 'blocks');
       const entities = get(tag, 'entities');
       return {
-        kind: 'structureData', title: 'Structure data',
+        kind: 'structureData', title: t('smart.structure'),
         kv: {
           size: Array.isArray(size) ? size.join(' × ') : String(size),
           palette: isList(palette) ? palette.v.length : 0,

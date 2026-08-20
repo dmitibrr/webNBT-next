@@ -84,7 +84,19 @@ button:disabled { opacity: .4; cursor: default; }
 button.active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
 button.active:hover { filter: brightness(1.08); }
 
-#search-wrap { margin-left: auto; flex: 0 1 320px; }
+#search-wrap { margin-left: auto; flex: 0 1 320px; display: flex; align-items: center; gap: 6px; }
+#lang-select {
+  flex: 0 0 auto;
+  max-width: 110px;
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 6px;
+  outline: none;
+  cursor: pointer;
+}
+#lang-select:focus { border-color: var(--accent); }
 #search-field {
   width: 100%;
   background: var(--bg-input);

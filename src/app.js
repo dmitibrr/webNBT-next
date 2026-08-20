@@ -5,6 +5,7 @@
 window.App = (function (ns) {
   'use strict';
   const { T, isCompound, isList, clone } = ns;
+  const t = ns.t, tpl = ns.tpl;
 
   const A = {
     doc: null,          // { kind:'nbt'|'chunk', filename, model, mode, region?, x?, z?, compression? }
@@ -143,7 +144,7 @@ window.App = (function (ns) {
       });
     }
     const tag = currentTag();
-    if (!tag) { refs.inspector.innerHTML = '<div class="panel-empty">Select a tag to inspect &amp; edit it.</div>'; return; }
+    if (!tag) { refs.inspector.innerHTML = '<div class="panel-empty">' + t('panel.empty') + '</div>'; return; }
     A.inspector.render(tag, A.selectedPath);
   }
 
@@ -281,7 +282,7 @@ window.App = (function (ns) {
         if (isList(container)) {
           if (container.et !== T.End && container.et !== moved.t) {
             if (container.v.length === 0) container.et = moved.t;
-            else { A.refreshAll(); toast('Cannot move ' + ns.typeName(moved.t) + ' into List<' + ns.typeName(container.et) + '>', 'err'); return; }
+            else { A.refreshAll(); toast(t('toast.cannotMove', ns.typeName(moved.t), ns.typeName(container.et)), 'err'); return; }
           }
           if (container.v.length === 0) container.et = moved.t;
         }
@@ -324,29 +325,29 @@ window.App = (function (ns) {
 
     const items = [];
     if (path.length > 0) {
-      items.push({ label: 'Rename…', key: 'F2', action: () => A.tree.beginNameEdit(path, tag) });
-      items.push({ label: 'Duplicate', action: () => duplicateTag(tag, path) });
-      items.push({ label: 'Copy', key: 'Ctrl+C', action: () => copyTag(tag) });
-      if (A.clipboard) items.push({ label: 'Paste after', key: 'Ctrl+V', action: () => pasteAfter(path) });
+      items.push({ label: t('menu.rename'), key: 'F2', action: () => A.tree.beginNameEdit(path, tag) });
+      items.push({ label: t('menu.duplicate'), action: () => duplicateTag(tag, path) });
+      items.push({ label: t('menu.copy'), key: 'Ctrl+C', action: () => copyTag(tag) });
+      if (A.clipboard) items.push({ label: t('menu.pasteAfter'), key: 'Ctrl+V', action: () => pasteAfter(path) });
     } else {
-      items.push({ label: 'Rename…', action: () => A.tree.beginNameEdit(path, tag) });
+      items.push({ label: t('menu.rename'), action: () => A.tree.beginNameEdit(path, tag) });
     }
     items.push({ sep: true });
 
     if (isCompound(tag)) {
       items.push({
-        label: '▾ New', submenu: [
+        label: t('menu.new'), submenu: [
           [1, 2, 3, 4, 5, 6, 8, 7, 11, 12, 9, 10].map((t) => ({
             label: ns.typeName(t), icon: ns.iconSvg(t),
             action: () => { pushHistory(); const name = nextFreeKey(tag, 'new_tag'); const c = ns.createTag(t, name); tag.v.push([name, c]); A.refreshAll(); },
           })),
         ],
       });
-      items.push({ label: 'Sort keys', action: () => { pushHistory(); tag.v.sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0); A.refreshAll(); } });
+      items.push({ label: t('menu.sortKeys'), action: () => { pushHistory(); tag.v.sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0); A.refreshAll(); } });
     }
     if (isList(tag)) {
       items.push({
-        label: 'Add element', action: () => {
+        label: t('menu.addElement'), action: () => {
           pushHistory();
           const c = ns.createTag(tag.et === T.End ? T.Int : tag.et, '');
           tag.v.push(c);
@@ -355,7 +356,7 @@ window.App = (function (ns) {
         },
       });
       items.push({
-        label: '▾ Element type', submenu: [
+        label: t('menu.elementType'), submenu: [
           [1, 2, 3, 4, 5, 6, 8, 10].map((t) => ({
             label: ns.typeName(t), icon: ns.iconSvg(t),
             action: () => { pushHistory(); if (tag.v.length) tag.v = []; tag.et = t; A.refreshAll(); },
@@ -364,11 +365,11 @@ window.App = (function (ns) {
       });
     }
     if (path.length > 0) {
-      items.push({ label: 'Delete', key: 'Del', danger: true, action: () => deleteTag(path) });
+      items.push({ label: t('menu.delete'), key: 'Del', danger: true, action: () => deleteTag(path) });
     }
 
     items.push({ sep: true });
-    items.push({ label: '▾ Change type', submenu: [
+    items.push({ label: t('menu.changeType'), submenu: [
       [1, 2, 3, 4, 5, 6, 8, 7, 11, 12, 9, 10].map((t) => ({
         label: ns.typeName(t), icon: ns.iconSvg(t), action: () => changeType(path, t),
       })),
@@ -420,7 +421,7 @@ window.App = (function (ns) {
 
   // ── clipboard ───────────────────────────────────────────────────────────────
 
-  function copyTag(tag) { A.clipboard = clone(tag); toast('Copied ' + ns.typeName(tag.t)); }
+  function copyTag(tag) { A.clipboard = clone(tag); toast(t('toast.copied', ns.typeName(tag.t))); }
 
   function pasteAfter(path) {
     if (!A.doc || !A.clipboard) return;
@@ -455,7 +456,7 @@ window.App = (function (ns) {
     }
     const loaded = await ns.codec.loadBuffer(buf);
     if (!loaded.decoded) {
-      toast('Could not parse file as NBT', 'err');
+      toast(t('err.parse'), 'err');
       return;
     }
     A.doc = {
@@ -467,7 +468,7 @@ window.App = (function (ns) {
     A.refreshStatus();
     refreshAll();
     if ((loaded.res.errors || []).length) {
-      toast('Parse had issues (' + loaded.res.errors.length + ') — lenient mode', 'warn');
+      toast(t('warn.parseIssues', loaded.res.errors.length), 'warn');
     }
   }
 
@@ -476,7 +477,7 @@ window.App = (function (ns) {
     if (A.doc.kind === 'region') {
       const bytes = await A.region.container.pack();
       ns.codec.download(bytes, A.region.filename);
-      toast('Saved region file');
+      toast(t('toast.savedRegion'));
       return;
     }
     if (A.doc.kind === 'chunk' && A.doc.region) {
@@ -484,12 +485,12 @@ window.App = (function (ns) {
       if (A.doc.region && A.doc.region.container) {
         A.doc.region.container.setChunkModel(A.doc.x, A.doc.z, A.doc.model, 2);
       }
-      toast('Staged chunk r.' + A.doc.x + '.' + A.doc.z + ' — save the region file to write', 'warn');
+      toast(t('toast.stagedChunk', A.doc.x, A.doc.z), 'warn');
       return;
     }
     const bytes = await ns.codec.compileModel(A.doc.model, A.doc.mode || 'gzip');
     ns.codec.download(bytes, A.doc.filename);
-    toast('Saved ' + A.doc.filename);
+    toast(t('toast.saved', A.doc.filename));
   }
 
   // ── region grid ─────────────────────────────────────────────────────────────
@@ -499,13 +500,13 @@ window.App = (function (ns) {
     const chunks = c.listChunks();
     const box = el2('div');
     box.style.cssText = 'padding:14px;overflow:auto;height:100%';
-    box.innerHTML = '<h2 style="margin-bottom:8px">Region file — ' + chunks.length + ' chunks</h2>';
+    box.innerHTML = '<h2 style="margin-bottom:8px">' + tpl('region.title', chunks.length) + '</h2>';
     const grid = el2('div');
     grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px';
     if (chunks.length === 0) {
       box.appendChild(grid);
       const none = el2('div');
-      none.textContent = 'No chunks in this region.';
+      none.textContent = t('region.empty');
       box.appendChild(none);
       refs.tree.innerHTML = '';
       refs.tree.appendChild(box);
@@ -517,7 +518,7 @@ window.App = (function (ns) {
       cell.style.cssText = 'text-align:left;padding:6px';
       cell.onclick = async () => {
         const model = await c.chunkModel(chunk.x, chunk.z);
-        if (!model) { toast('Chunk unreadable', 'err'); return; }
+        if (!model) { toast(t('err.chunkUnreadable'), 'err'); return; }
         A.doc = { kind: 'chunk', filename: chunk.x + '.' + chunk.z + '.nbt', model, mode: 'zlib', region: c, x: chunk.x, z: chunk.z };
         A.hist = []; A.future = [];
         A.selectedPath = null;
@@ -530,7 +531,7 @@ window.App = (function (ns) {
     box.appendChild(grid);
     // save region button
     const saveBtn = el2('button');
-    saveBtn.textContent = 'Save region file';
+    saveBtn.textContent = t('region.saveBtn');
     saveBtn.style.marginTop = '12px';
     saveBtn.onclick = async () => {
       if (A.doc.kind === 'chunk') {
@@ -541,7 +542,7 @@ window.App = (function (ns) {
       }
       const bytes = await A.region.container.pack();
       ns.codec.download(bytes, A.region.filename);
-      toast('Saved region file');
+      toast(t('toast.savedRegion'));
     };
     refs.tree.innerHTML = '';
     refs.tree.appendChild(box);
@@ -567,13 +568,13 @@ window.App = (function (ns) {
     if (!A.doc) return;
     s.file.textContent = A.doc.filename || '—';
     if (A.doc.kind === 'region') {
-      s.mode.textContent = 'region · ' + A.region.container.listChunks().length + ' chunks';
+      s.mode.textContent = tpl('status.region', A.region.container.listChunks().length);
       s.count.textContent = '';
       s.errors.textContent = '';
     } else {
-      const mode = A.doc.kind === 'chunk' ? ('chunk ' + A.doc.x + '.' + A.doc.z + ') ') : '';
+      const mode = A.doc.kind === 'chunk' ? (t('status.chunk', A.doc.x, A.doc.z) + ' ') : '';
       s.mode.textContent = mode + (ns.codec.MODES[A.doc.mode] ? ns.codec.MODES[A.doc.mode].label : '');
-      s.count.textContent = ns.countTags(A.doc.model) + ' tags';
+      s.count.textContent = tpl('status.tags', ns.countTags(A.doc.model));
       s.errors.textContent = '';
       if (A.doc.model && A.doc.n) {}
     }
@@ -581,7 +582,7 @@ window.App = (function (ns) {
   }
 
   function refreshHistory() {
-    refs.status.history.textContent = A.hist.length ? 'hist ' + A.hist.length : '';
+    refs.status.history.textContent = A.hist.length ? t('status.hist', A.hist.length) : '';
   }
 
   function refreshButtons() {
@@ -621,7 +622,7 @@ window.App = (function (ns) {
       refs.empty.classList.add('hidden');
       A.refreshStatus();
       refreshAll();
-      toast('Imported from SNBT');
+      toast(t('toast.importedSNBT'));
     } catch (e) {
       try {
         const obj = JSON.parse(text);
@@ -632,19 +633,19 @@ window.App = (function (ns) {
         refs.empty.classList.add('hidden');
         A.refreshStatus();
         refreshAll();
-        toast('Imported from JSON');
+        toast(t('toast.importedJSON'));
       } catch (e2) {
-        toast('Import failed: ' + e.message, 'err');
+        toast(t('err.importFailed', e.message), 'err');
       }
     }
   }
 
   function showFormatsMenu(x, y) {
     const items = [
-      { label: 'Export as SNBT', action: exportCurrentSNBT },
-      { label: 'Export as JSON', action: exportCurrentJSON },
+      { label: t('formats.exportSNBT'), action: exportCurrentSNBT },
+      { label: t('formats.exportJSON'), action: exportCurrentJSON },
       { sep: true },
-      { label: 'Import SNBT / JSON file…', action: () => refs.file.click() },
+      { label: t('formats.import'), action: () => refs.file.click() },
     ];
     showMenu(x, y, items);
   }
@@ -772,9 +773,9 @@ window.App = (function (ns) {
     A.booted = true;
     grab();
     const start = performance.now();
-    refs.loading.textContent = 'Booting NBT codec…';
+    refs.loading.textContent = t('loading.booting');
     await ns.codec.ready();
-    refs.loading.textContent = 'Ready';
+    refs.loading.textContent = t('loading.ready');
     refs.shade.classList.add('done');
     makeTree();
     wire();
@@ -795,6 +796,10 @@ window.App = (function (ns) {
     toast,
     saveDoc,
     openFile,
+    refreshAll,
+    refreshStatus,
+    refreshButtons,
+    refreshTree: () => A.tree.refresh(),
   };
 })(window.NBT || {});
 

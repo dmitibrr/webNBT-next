@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>webNBT · NBT editor</title>
+
+  <link rel="stylesheet" href="style/app.css" />
+
+  <!-- Wasm NBT codec (self-contained, embedded wasm) -->
+  <script src="NBT.js"></script>
+
+  <!-- Core logic (order matters: model → codec → format → region → mcdata) -->
+  <script src="src/model.js"></script>
+  <script src="src/codec.js"></script>
+  <script src="src/format.js"></script>
+  <script src="src/region.js"></script>
+  <script src="src/mcdata.js"></script>
+  <script src="src/treeview.js"></script>
+  <script src="src/inspector.js"></script>
+  <script src="src/app.js"></script>
+</head>
+<body>
+  <div id="drop-zone">
+    <div class="dz-box">
+      <div class="dz-title">Drop a file here</div>
+      <div class="dz-sub">.dat &middot; .schematic &middot; .mcmeta &middot; .mca / .mcr (region) &middot; any NBT
+        (gzip, zlib, raw deflate or uncompressed)</div>
+    </div>
+  </div>
+
+  <div id="loading-shade">
+    <div class="load-box">
+      <div class="spinner"></div>
+      <div id="loading-text">Booting NBT codec…</div>
+    </div>
+  </div>
+
+  <header id="topbar">
+    <div id="brand" title="webNBT — NBT editor">▣ webNBT</div>
+    <div id="toolbar">
+      <button id="btn-open" title="Open file (Ctrl+O)">Open</button>
+      <button id="btn-save" title="Save file (Ctrl+S)">Save</button>
+      <button id="btn-export" title="Import / export as SNBT or JSON">⇅ Formats</button>
+
+      <span class="tb-sep"></span>
+
+      <button id="btn-undo" title="Undo (Ctrl+Z)" disabled>↶</button>
+      <button id="btn-redo" title="Redo (Ctrl+Y)" disabled>↷</button>
+
+      <span class="tb-sep"></span>
+
+      <button id="btn-add" title="Add tag">＋</button>
+      <button id="btn-duplicate" title="Duplicate" disabled>⧉</button>
+      <button id="btn-delete" title="Delete tag (Del)" disabled>🗑</button>
+
+      <span class="tb-sep"></span>
+
+      <button id="btn-hex" title="Toggle hex view" class="active"># Hex</button>
+      <button id="btn-smart" title="Smart views for structures/inventories" class="active">✲ Smart</button>
+      <button id="btn-theme" title="Toggle theme">🌓</button>
+    </div>
+    <div id="search-wrap">
+      <input id="search-field" type="search" placeholder="Search tags… (Enter next)" autocomplete="off" />
+    </div>
+  </header>
+
+  <main id="layout">
+    <section id="tree-pane">
+      <div id="tree" tabindex="0"></div>
+      <div id="empty-state">
+        <div class="es-big">No file loaded</div>
+        <div class="es-sub">Click <b>Open</b>, drop a file anywhere, or <button id="empty-open">browse…</button></div>
+      </div>
+    </section>
+
+    <section id="right-pane">
+      <div id="inspector">
+        <div class="panel-empty">Select a tag to inspect &amp; edit it.</div>
+      </div>
+      <div id="hexview" class="hidden"></div>
+    </section>
+  </main>
+
+  <footer id="statusbar">
+    <span id="st-file">—</span>
+    <span id="st-mode"></span>
+    <span id="st-count"></span>
+    <span id="st-errors"></span>
+    <span id="st-history"></span>
+  </footer>
+
+  <input type="file" id="file-input" multiple hidden />
+</body>
+</html>

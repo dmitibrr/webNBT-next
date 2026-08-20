@@ -1,0 +1,3044 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>webNBT · NBT editor</title>
+
+  <style>
+/* ─────────────────────────────── webNBT next ─────────────────────────────── */
+
+:root {
+  --radius: 8px;
+  --gap: 10px;
+  --header-h: 44px;
+  --status-h: 24px;
+
+  --bg: #16181d;
+  --bg-panel: #1d2027;
+  --bg-raised: #262a33;
+  --bg-hover: #2d313c;
+  --bg-active: #343948;
+  --bg-input: #101216;
+  --border: #333947;
+  --text: #d9dee6;
+  --text-dim: #8b93a3;
+  --text-faint: #5b6372;
+  --accent: #4da3ff;
+  --accent-dim: #2c5f87;
+  --accent-contrast: #0d1b2b;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --err: #f85149;
+  --sel: rgba(77, 163, 255, .18);
+  --font: 12px/1.5 ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: 12px/1.5 ui-monospace, "SF Mono", "JetBrains Mono", Consolas, Menlo, monospace;
+}
+[data-theme="light"] {
+  --bg: #f2f3f5;
+  --bg-panel: #ffffff;
+  --bg-raised: #e9ecf1;
+  --bg-hover: #dfe4eb;
+  --bg-active: #d3d9e3;
+  --bg-input: #ffffff;
+  --border: #d3d8e0;
+  --text: #20242c;
+  --text-dim: #5a6270;
+  --text-faint: #9aa2b0;
+  --accent: #1f6feb;
+  --accent-contrast: #fff;
+  --sel: rgba(31, 111, 235, .14);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+button { font: inherit; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ── topbar ── */
+#topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  height: var(--header-h);
+  padding: 0 12px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+#brand { font-weight: 700; letter-spacing: .5px; color: var(--accent); white-space: nowrap; }
+#toolbar { display: flex; align-items: center; gap: 4px; flex: 0 1 auto; overflow-x: auto; }
+.tb-sep { width: 1px; height: 18px; background: var(--border); margin: 0 6px; }
+
+button {
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button:hover:not(:disabled) { background: var(--bg-hover); }
+button:active:not(:disabled) { background: var(--bg-active); }
+button:disabled { opacity: .4; cursor: default; }
+button.active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+button.active:hover { filter: brightness(1.08); }
+
+#search-wrap { margin-left: auto; flex: 0 1 320px; }
+#search-field {
+  width: 100%;
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  outline: none;
+}
+#search-field:focus { border-color: var(--accent); }
+
+/* ── layout ── */
+#layout {
+  position: absolute;
+  inset: var(--header-h) 0 var(--status-h) 0;
+  display: flex;
+}
+#tree-pane {
+  flex: 1 1 auto;
+  min-width: 260px;
+  overflow: auto;
+  position: relative;
+}
+#right-pane {
+  flex: 0 0 380px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+body.no-right #right-pane { display: none; }
+
+#inspector { flex: 1 1 auto; overflow: auto; }
+#hexview {
+  flex: 0 0 38%;
+  border-top: 1px solid var(--border);
+  overflow: auto;
+  font: var(--mono);
+  white-space: pre;
+  background: var(--bg-input);
+  padding: 8px;
+}
+#hexview.hidden { display: none; }
+#hexview .addr { color: var(--text-faint); }
+#hexview .bytes { color: var(--text-dim); }
+#hexview .ascii { color: var(--text); }
+#hexview .hl { color: var(--accent); font-weight: 700; }
+
+/* ── tree ── */
+#tree { padding: 8px 6px 40px; user-select: none; outline: none; }
+#tree ul.tree { list-style: none; }
+#tree ul.tree ul { list-style: none; margin-left: 18px; }
+#tree li {
+  display: block;
+  margin: 1px 0;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+#tree li > .node { display: flex; align-items: center; padding: 2px 6px; border-radius: 5px; cursor: default; }
+#tree li > .node:hover { background: var(--bg-hover); }
+#tree li.selected > .node { background: var(--sel); outline: 1px solid var(--accent); }
+#tree li.dragover-top > .node::before,
+#tree li.drop-target > .node::before { content: "—"; position: relative; left: -6px; color: var(--accent); }
+#tree li.match { outline: 1px dashed var(--warn); }
+#tree li.leaf-empty { opacity: .55; font-style: italic; }
+
+.caret { width: 16px; flex: 0 0 16px; cursor: pointer; transition: transform .12s; color: var(--text-dim); }
+.caret.open { transform: rotate(90deg); }
+.caret.leaf { visibility: hidden; }
+.icon { flex: 0 0 16px; margin-right: 5px; }
+
+.entry-name { font-weight: 600; }
+.entry-name.unnamed { color: var(--text-faint); font-style: italic; }
+.entry-val { margin-left: 6px; color: var(--text-dim); }
+.entry-val.mono { font-family: var(--mono); color: var(--accent); }
+.entry-val.str { color: var(--ok); }
+.badge {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.name-input {
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  font: inherit;
+  padding: 0 4px;
+  outline: none;
+}
+
+/* ── custom context menu ── */
+.menu {
+  position: fixed;
+  z-index: 900;
+  min-width: 190px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .4);
+  padding: 4px;
+  max-height: 70vh;
+  overflow: auto;
+}
+.menu .mi { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+.menu .mi:hover { background: var(--bg-active); }
+.menu .mi.disabled { opacity: .4; pointer-events: none; }
+.menu .mi .mk { margin-left: auto; color: var(--text-faint); font-size: 10px; }
+.menu .sep { height: 1px; background: var(--border); margin: 4px 6px; }
+.menu .sub { position: relative; }
+.menu .sub > .mi::after { content: "›"; margin-left: auto; color: var(--text-faint); }
+.menu .sub-child {
+  position: absolute;
+  left: calc(100% - 4px);
+  top: -4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .4);
+  padding: 4px;
+  display: none;
+  min-width: 160px;
+}
+.menu .sub:hover > .sub-child { display: block; }
+
+/* ── inspector ── */
+.panel-empty { padding: 30px 20px; color: var(--text-dim); text-align: center; }
+.insp {
+  padding: 12px;
+}
+.insp h2 { font-size: 13px; margin-bottom: 2px; display: flex; align-items: center; gap: 8px; }
+.insp .path { color: var(--text-faint); font-family: var(--mono); font-size: 10px; margin: 2px 0 10px; word-break: break-all; }
+.insp .type-chip {
+  font-size: 10px; font-weight: 600;
+  background: var(--bg-raised); color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 4px; padding: 1px 6px;
+}
+.field { margin: 10px 0; }
+.field label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--text-faint); margin-bottom: 4px; }
+input.in, textarea.in, select.in {
+  width: 100%;
+  background: var(--bg-input);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  outline: none;
+}
+input.in:focus, textarea.in:focus { border-color: var(--accent); }
+textarea.in { min-height: 90px; resize: vertical; font-family: var(--mono); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chip {
+  font-family: var(--mono); font-size: 10px;
+  padding: 2px 7px; border-radius: 10px;
+  background: var(--bg-raised); border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.chip b { color: var(--text); }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.actions button { font-size: 11px; padding: 3px 8px; }
+
+.section-title { font-size: 11px; font-weight: 700; color: var(--text-dim); margin: 16px 0 6px; text-transform: uppercase; letter-spacing: .5px; }
+
+table.array-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+table.array-table td { border-bottom: 1px solid var(--border); padding: 2px 4px; }
+table.array-table input { width: 100%; background: transparent; border: 1px solid transparent; color: var(--text); border-radius: 4px; padding: 2px 4px; }
+table.array-table input:hover { border-color: var(--border); }
+table.array-table input:focus { border-color: var(--accent); outline: none; }
+table.array-table .idx { color: var(--text-faint); width: 34px; }
+.row-del { border: none; background: none; color: var(--err); cursor: pointer; }
+.row-del:hover { filter: brightness(1.3); }
+
+.smart-card { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: 8px; }
+.smart-card .sc-head { display: flex; gap: 12px; padding: 8px 10px; background: var(--bg-raised); align-items: center; flex-wrap: wrap; }
+.smart-card .sc-head .big { font-weight: 700; margin-right: auto; }
+.smart-card .sc-grid { display: flex; gap: 14px; padding: 8px 10px; flex-wrap: wrap; }
+.smart-card .sc-kv b { display: block; font-size: 10px; color: var(--text-faint); }
+.smart-card .sc-kv span { font-family: var(--mono); }
+.smart-inv { padding: 8px 10px; }
+.smart-inv .slot { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border); padding: 5px 0; }
+.smart-inv .slot:first-child { border-top: none; }
+.smart-inv .slot .count { font-family: var(--mono); color: var(--warn); min-width: 26px; }
+.smart-inv .slot .name { flex: 1; }
+.smart-inv .slot .extra { color: var(--text-faint); font-family: var(--mono); font-size: 10px; }
+
+.hex-mini { font-family: var(--mono); font-size: 10px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 6px; max-height: 140px; overflow: auto; }
+.preview-img { max-width: 100%; max-height: 180px; border-radius: 6px; border: 1px solid var(--border); margin-top: 6px; }
+
+.notice { background: var(--bg-raised); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 8px 10px; margin: 10px 0; display: flex; align-items: center; gap: 10px; }
+.notice.warn { border-left-color: var(--warn); }
+.notice.err { border-left-color: var(--err); }
+.notice button { font-size: 11px; margin-left: auto; }
+
+/* ── drop zone / loading ── */
+#drop-zone {
+  position: fixed; inset: 0; z-index: 500;
+  display: none; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg));
+  backdrop-filter: blur(2px);
+}
+body.dragging #drop-zone { display: flex; }
+.dz-box { border: 2px dashed var(--accent); border-radius: 14px; padding: 50px 70px; text-align: center; background: var(--bg-panel); }
+.dz-title { font-size: 22px; font-weight: 700; }
+.dz-sub { color: var(--text-dim); margin-top: 8px; }
+
+#loading-shade {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+  transition: opacity .3s;
+}
+#loading-shade.done { opacity: 0; pointer-events: none; }
+.load-box { text-align: center; color: var(--text-dim); }
+.spinner {
+  width: 34px; height: 34px; margin: 0 auto 14px;
+  border: 3px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── statusbar ── */
+#statusbar {
+  position: absolute; bottom: 0; left: 0; right: 0; height: var(--status-h);
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 12px;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--text-dim);
+}
+#statusbar b { color: var(--text); font-weight: 600; }
+#st-errors.err { color: var(--err); }
+
+/* ── toast ── */
+#toasts { position: fixed; right: 14px; bottom: calc(var(--status-h) + 12px); z-index: 800; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  background: var(--bg-raised); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent); border-radius: 8px;
+  padding: 8px 14px; max-width: 360px; box-shadow: 0 6px 24px rgba(0, 0, 0, .35);
+  animation: fadein .15s ease-out;
+}
+.toast.err { border-left-color: var(--err); }
+.toast.warn { border-left-color: var(--warn); }
+@keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
+
+/* dropfile helpers */
+body.dragging * { pointer-events: none; }
+body.dragging #drop-zone { pointer-events: auto; }
+</style>
+
+  <!-- Wasm NBT codec (self-contained, embedded wasm) -->
+  
+
+  <!-- Core logic (order matters: model → codec → format → region → mcdata) -->
+  <script>
+var createNBTModule=(()=>{var _scriptName=globalThis.document?.currentScript?.src;return async function(moduleArg={}){var Module=moduleArg;var ENVIRONMENT_IS_WEB=!!globalThis.window;var ENVIRONMENT_IS_WORKER=!!globalThis.WorkerGlobalScope;var ENVIRONMENT_IS_NODE=globalThis.process?.versions?.node&&globalThis.process?.type!="renderer";var programArgs=[];var thisProgram="./this.program";var quit_=(status,toThrow)=>{throw toThrow};if(typeof __filename!="undefined"){_scriptName=__filename}else if(ENVIRONMENT_IS_WORKER){_scriptName=self.location.href}var scriptDirectory="";var readAsync,readBinary;if(ENVIRONMENT_IS_NODE){var fs=require("node:fs");scriptDirectory=__dirname+"/";readBinary=filename=>{filename=isFileURI(filename)?new URL(filename):filename;var ret=fs.readFileSync(filename);return ret};readAsync=async(filename,binary=true)=>{filename=isFileURI(filename)?new URL(filename):filename;var ret=fs.readFileSync(filename,binary?undefined:"utf8");return ret};if(process.argv.length>1){thisProgram=process.argv[1].replace(/\\/g,"/")}programArgs=process.argv.slice(2);quit_=(status,toThrow)=>{process.exitCode=status;throw toThrow}}else if(ENVIRONMENT_IS_WEB||ENVIRONMENT_IS_WORKER){try{scriptDirectory=new URL(".",_scriptName).href}catch{}{if(ENVIRONMENT_IS_WORKER){readBinary=url=>{var xhr=new XMLHttpRequest;xhr.open("GET",url,false);xhr.responseType="arraybuffer";xhr.send(null);return new Uint8Array(xhr.response)}}readAsync=async url=>{if(isFileURI(url)){return new Promise((resolve,reject)=>{var xhr=new XMLHttpRequest;xhr.open("GET",url,true);xhr.responseType="arraybuffer";xhr.onload=()=>{if(xhr.status==200||xhr.status==0&&xhr.response){resolve(xhr.response);return}reject(xhr.status)};xhr.onerror=reject;xhr.send(null)})}var response=await fetch(url,{credentials:"same-origin"});if(response.ok){return response.arrayBuffer()}throw new Error(response.status+" : "+response.url)}}}else{}var out=console.log.bind(console);var err=console.error.bind(console);var wasmBinary;var ABORT=false;var isFileURI=filename=>filename.startsWith("file://");class EmscriptenEH{}class EmscriptenSjLj extends EmscriptenEH{}class CppException extends EmscriptenEH{constructor(excPtr){super();this.excPtr=excPtr}}function binaryDecode(bin){for(var i=0,l=bin.length,o=new Uint8Array(l),c;i<l;++i){c=bin.charCodeAt(i);o[i]=~c>>8&c}return o}var runtimeInitialized=false;function getMemoryBuffer(){return wasmMemory.buffer}function updateMemoryViews(){if(HEAP8?.buffer?.resizable)return;var b=getMemoryBuffer();HEAP8=new Int8Array(b);HEAP16=new Int16Array(b);HEAPU8=new Uint8Array(b);HEAPU16=new Uint16Array(b);HEAP32=new Int32Array(b);HEAPU32=new Uint32Array(b);HEAPF32=new Float32Array(b);HEAPF64=new Float64Array(b);HEAP64=new BigInt64Array(b);HEAPU64=new BigUint64Array(b)}function preRun(){var preRun=Module["preRun"];if(preRun){if(typeof preRun=="function")preRun=[preRun];onPreRuns.push(...preRun)}callRuntimeCallbacks(onPreRuns)}function initRuntime(){runtimeInitialized=true;wasmExports["Q"]()}function postRun(){var postRun=Module["postRun"];if(postRun){if(typeof postRun=="function")postRun=[postRun];onPostRuns.push(...postRun)}callRuntimeCallbacks(onPostRuns)}function abort(what){Module["onAbort"]?.(what);what=`Aborted(${what})`;err(what);ABORT=true;what+=". Build with -sASSERTIONS for more info.";var e=new WebAssembly.RuntimeError(what);throw e}var wasmBinaryFile;function findWasmBinary(){return binaryDecode(' asm   ` `` ` ``` `  ` ` ` ``|`|` `~`~~ `}`~` `}÷)aa \nab ac ad ae af ag ah ai  aj ak al am \ran ao ap aq ar as  at au 	av aw ax  ay az \naA \naB aC aD aE  aF aG aH aI aJ aK  aL aM aN aO  cb           \n 		   pUUAð¯7\rP Q R S .T U )V nW mX TY SZ c_ Y$ X	c ATPoky>w-\r(\n#QOg,~}dhi|{z"xvut7!sRrqpj0fDleGbEK6D2CCa2`Z\\_2[]^2W2V9U99\nìñbß@  E\r   Ak"  Ak( "Axq" j!@ Aq\r  AqE\r  ( "k"Aø\'( I\r   j! @@@Aü\'(  G@ (! AÿM@  ("G\rAè\'Aè\'( A~ Avwq6  (!  G@ (" 6  6 (" Aj ("E\r Aj!@ ! "Aj! ("\r  Aj! ("\r  A 6  ("AqAG\rAð\'  6   A~q6   Ar6   6   6  6A ! E\r @ ("At"(* F@ A*j 6  \rAì\'Aì\'( A~ wq6 @  (F@  6  6 E\r  6 ("@  6  6 ("E\r   6  6  O\r  ("AqE\r @@@@ AqE@A((  F@A( 6 Aô\'Aô\'(   j" 6    Ar6 Aü\'( G\rAð\'A 6 Aü\'A 6 Aü\'( " F@Aü\' 6 Að\'Að\'(   j" 6    Ar6   j  6  Axq  j!  (! AÿM@ (" F@Aè\'Aè\'( A~ Avwq6   6  6 (!  G@ (" 6  6 (" Aj ("E\r Aj!@ ! "Aj! ("\r  Aj! ("\r  A 6   A~q6   Ar6   j  6 A ! E\r @ ("At"(* F@ A*j 6  \rAì\'Aì\'( A~ wq6 @  (F@  6  6 E\r  6 ("@  6  6 ("E\r   6  6   Ar6   j  6   G\r Að\'  6   AÿM@  AøqA(j!Aè\'( "A  Avt" qE@Aè\'   r6   (!   6   6  6   6A!  AÿÿÿM@  A&  Avg"kvAq AtrA>s!  6 B 7 AtA*j!@Aì\'( "A t"qE@Aì\'  r6   6 A!A  A AvkA  AGt! ( !@ "(Axq  F\r Av! At!  Aqj"("\r   6A! !A!  " (" 6  6A! A!A !  j 6   6   j 6 A(A(( Ak" A  6 ; @  (" A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\rA + \n   F @@@  , "A N@A\n! A\nF\r   AjAÿ q:   ("  (AÿÿÿÿqAk"G\r !# A k"$  Aj   AjH8  (     , A H!@ E"\r  \r  (  ü\n  @A\r A !A\r   (j  j ü\n   A6  (6  )7   Aj4 A j$    6   Aj6  ( !    j" A :    :  HA    AM! @@  ."\rAà+( "@  A3" A$6   Aè$A7  É\'# Ak"\n$ @@@@@@@@@@@@  AôM@Aè\'( "A  AjAøq  AI"Av" v"Aq@@ AsAq  j"At"A(j"  (("("F@Aè\' A~ wq6    6   6 Aj!   Ar6  j" (Ar6\r Að\'( "M\r @@A  t"A  kr   tqh"At"A(j" ((" ("F@Aè\' A~ wq"6   6  6   Ar6   j"  k"Ar6   j 6  @ AxqA(j!Aü\'( ! A Avt"qE@Aè\'  r6   (!  6  6  6  6  Aj! Aü\' 6 Að\' 6 \rAì\'( "E\r hAt(*"(Axq k! !@@ (" E@ (" E\r  (Axq k"   I"!    !  ! (!	  (" G@ ("  6   6 (" Aj ("E\r Aj!@ ! " Aj!  ("\r   Aj!  ("\r  A 6 A!  A¿K\r   Aj"Axq!Aì\'( "E\r A!A  k!  AôÿÿM@ A& Avg" kvAq  AtkA>j!@@@ At(*"E@A ! A !  A AvkA  AGt!@@ (Axq k" O\r  ! "\r A ! !    ("   AvAqj("F   !  At! \r    rE@A !A t" A   kr q" E\r  hAt(*!   E\r@  (Axq k" I!   !    !  ("   (" \r  E\r  Að\'(  kO\r  (!  (" G@ ("  6   6\n (" Aj ("E\r Aj!@ ! " Aj!  ("\r   Aj!  ("\r  A 6 	 Að\'( "M@Aü\'( ! @  k"AO@   j" Ar6   j 6    Ar6   Ar6   j" (Ar6A !A !Að\' 6 Aü\' 6   Aj!  Aô\'( "I@Aô\'  k"6 A(A(( "  j"6   Ar6   Ar6  Aj! A !  A/j"AÀ+( @AÈ+( AÌ+B7 AÄ+B 7 AÀ+ \nAjApqAØªÕªs6 AÔ+A 6 A¤+A 6 A "j"A  k"q" M\r\nA +( "@A+( " j"	 M\r  	I\rA¤+-  Aq\r@@A(( "@A¨+! @  ( " M@    (jI\r  (" \r A 1"AF\r !AÄ+( " Ak" q@  k  jA   kqj!  M\rA +( " @A+( " j" M\r   I\r 1"  G\r  k q"1"  (   (jF\r ! @  A0jO\r   AF\r AÈ+( "  kjA  kq"1AF\r  j!  !  "AG\rA ! A !  AG\rA¤+A¤+( Ar6  1!A 1!  AF\r  AF\r   M\r   k" A(jM\rA+A+(  j" 6 A+(   I@A+  6 @@@A(( "@A¨+! @   ( "  ("jF\r  (" \r Aø\'( " A    ME@Aø\' 6 A ! A¬+ 6 A¨+ 6 A(A6 A(AÀ+( 6 A´+A 6 @  At" A(j"6(  6(  Aj" A G\r Aô\' A(k" Ax kAq"k"6 A(  j"6   Ar6   jA(6A(AÐ+( 6   M\r   K\r   (Aq\r     j6A( Ax kAq" j"6 Aô\'Aô\'(  j"  k" 6    Ar6  jA(6A(AÐ+( 6 Aø\'(  K@Aø\' 6   j!A¨+! @@   ( "G@  (" \r  - AqE\rA¨+! @@  ( " M@    (j"I\r  (! Aô\' A(k" Ax kAq"k"6 A(  j"6   Ar6   jA(6A(AÐ+( 6   A\' kAqjA/k"    AjI"A6 A°+) 7 A¨+) 7A°+ Aj6 A¬+ 6 A¨+ 6 A´+A 6  Aj! @  A6  Aj  Aj!  I\r   F\r   (A~q6   k"Ar6  6  AÿM@ AøqA(j! Aè\'( "A Avt"qE@Aè\'  r6     (!   6  6A!AA!  AÿÿÿM@ A& Avg" kvAq  AtrA>s!    6 B 7  AtA*j!@@Aì\'( "A  t"qE@Aì\'  r6   6  A  AvkA   AGt!  ( !@ "(Axq F\r  Av!  At!   Aqj"("\r   6  6A! "! A ("  6  6   6A ! A!A j 6   j  6 Aô\'( "  M\r Aô\'   k"6 A(A(( "  j"6   Ar6   Ar6  Aj! Aä\'A06 A !    6     ( j6 Ax kAqj" Ar6 Ax kAqj"  j"k!@A((  F@A( 6 Aô\'Aô\'(  j" 6    Ar6Aü\'(  F@Aü\' 6 Að\'Að\'(  j" 6    Ar6   j  6  (" AqAF@  Axq!	 (!@  AÿM@ (" F@Aè\'Aè\'( A~  Avwq6   6  6 (!@  G@ ("  6   6@ ("  Aj (" E\r Aj!@ !  "Aj!  (" \r  Aj! (" \r  A 6 A ! E\r @ (" At"(* F@ A*j 6  \rAì\'Aì\'( A~  wq6 @  (F@  6  6 E\r  6 (" @   6   6 (" E\r    6   6  	j!  	j"(!    A~q6  Ar6  j 6  AÿM@ AøqA(j! Aè\'( "A Avt"qE@Aè\'  r6     (!   6  6   6  6A! AÿÿÿM@ A& Avg" kvAq  AtrA>s!  6 B 7 AtA*j! @@Aì\'( "A t"qE@Aì\'  r6    6  A AvkA  AGt!  ( !@ " (Axq F\r Av! At!   Aqj"("\r   6   6  6  6  (" 6   6 A 6   6  6 Aj! @ E\r @ ("At"(* F@ A*j  6   \rAì\' A~ wq"6 @  (F@   6   6  E\r   6 ("@   6   6 ("E\r    6   6@ AM@   j" Ar6   j"   (Ar6  Ar6  j" Ar6  j 6  AÿM@ AøqA(j! Aè\'( "A Avt"qE@Aè\'  r6     (!   6  6   6  6A!  AÿÿÿM@ A& Avg" kvAq  AtrA>s!    6 B 7  AtA*j!@@ A  t"qE@Aì\'  r6   6   6 A  AvkA   AGt!  ( !@ "(Axq F\r  Av!  At!   Aqj"("\r   6  6  6  6 ("  6  6 A 6  6   6 Aj! @ 	E\r @ ("At"(* F@ A*j  6   \rAì\' A~ wq6 @  	(F@ 	  6 	  6  E\r   	6 ("@   6   6 ("E\r    6   6@ AM@   j" Ar6   j"   (Ar6  Ar6  j" Ar6  j 6  @ AxqA(j! Aü\'( !A Avt" qE@Aè\'  r6     (!   6  6   6  6Aü\' 6 Að\' 6  Aj!  \nAj$   t E@  ( (F   F@A ("-  !@  ("-  " E\r    G\r @ - ! - " E\r Aj! Aj!   F\r    F Aº? T~@A´&( "­  ­B|Bøÿÿÿ|"BÿÿÿÿX@ §" ? AtM\r  \rAä\'A06 AA´&  6     )ZAØ+A 6 A;  AjA|q"! AØ+( !AØ+A 6 @ AG@  E\r @  A  ü   AjA + F .   , A H@  (  ( )   (6   ) 7 }@@  "AqE\r  -  E@A @ Aj"AqE\r -  \r @ "Aj!A ( "k rAxqAxF\r @ "Aj! -  \r    k K «   (AÿÿÿÿqAkA\n  , "A H""  (  "kK@     j k    I   @  (    A H! @  j  ü\n    j!@  , A H@   6   Aÿ q:   jA :    . AxqAj"-!   Axr6   6   6    >  )- AØ+A 6   AkEAØ+( AØ+A 6 AG@A + *   AÀ=n"At/ð;    Aj  AÀ=lk<*   AÎ n"At/ð;    Aj  AÎ lk=2   Aä n"At/ð;      Aä lkAt/ð;   Aj6  A%6   ("Ak" ( Ak"6  A H@ Ak)  CA3!AØ+A 6 A   ! AØ+( AØ+A 6 AG@  AÈ%A   :    A: 5@   (G\r   A: 4@  ("E@  A6$   6   6 AG\r  (0AF\r  F@  ("AF@   6 !  (0AG\r AF\r    ($Aj6$  A: 6v  ($"E@   6   6  A6$    (86@@  (  (8G\r   ( G\r   (AG\r   6  A: 6  A6   Aj6$# A@j"$     ( "Ak( "j!@ Ak( "( (F@A   !    N@ B 7 A 6  6   6  6 B 7 B 7$ B 7, A 6< B74  Aj  AA  ( (	  (\r B 7 A 6  6   6  6 B 7 B 7$ B 7, B 7 3 A 6< A: ;  Aj AA  ( ( A ! @@ ((  (A  ($AFA  ( AFA  (,AF!  (AG@ (,\r ( AG\r ($AG\r (!  A@k$       á@  Að+I\r   Að/O\r   Ak!  Ak!Aä+( "!@@@ " E\r   Að/F\r      /"AtjF@   /  j;    / "AtjF@   j;  E@Aä+ 6    / ;   Að+kAv;   / AtAð+j!  !   Að+kAv; Aä+ 6   )A¸&( AØ+A 6 AØ+( ! AØ+A 6 @  AG@AØ+A 6 A>AA AØ+( AØ+A 6 AG\rA AØ+A 6 A>A¾\nA AØ+( AØ+A 6 AG\r A + 9# A k"$   (  A 6 B 7 B 7  A 6 4 A j$ L A÷ÿÿÿO@0 Aöÿÿÿ A\n  (AÿÿÿÿqAk  , A N" At"  K  AóÿÿÿKÔ# A k"$  Aj    jH8  (     , A H!@ E"\r  \r  (  ü\n  @ E"\r  \r  ( j  ü\n    k!@  F\r  E\r  ( j j  j ü\n     j j"6 ( jA :    (6  )7   Aj4 A j$ ^# Ak"$  A÷ÿÿÿI@@ A\nM@   :  Aj 8   (6   )7   ( !  Aj$   0   :   A%6 AØ+A 6 A8  Aj AØ+( AØ+A 6 AG@       j!@@  ("Aq\r  AqE\r  ( " j!@@@   k" Aü\'( G@  (! AÿM@   ("G\rAè\'Aè\'( A~ Avwq6   (!   G@  (" 6  6  ("  Aj  ("E\r  Aj!@ ! "Aj! ("\r  Aj! ("\r  A 6  ("AqAG\rAð\' 6   A~q6   Ar6  6   6  6A ! E\r @  ("At"(*  F@ A*j 6  \rAì\'Aì\'( A~ wq6 @   (F@  6  6 E\r  6  ("@  6  6  ("E\r   6  6@@@@ ("AqE@A((  F@A(  6 Aô\'Aô\'(  j"6    Ar6  Aü\'( G\rAð\'A 6 Aü\'A 6 Aü\'( " F@Aü\'  6 Að\'Að\'(  j"6    Ar6   j 6  Axq j! (! AÿM@ (" F@Aè\'Aè\'( A~ Avwq6   6  6 (!  G@ (" 6  6 (" Aj ("E\r Aj!@ ! "Aj! ("\r  Aj! ("\r  A 6   A~q6   Ar6   j 6 A ! E\r @ ("At"(* F@ A*j 6  \rAì\'Aì\'( A~ wq6 @  (F@  6  6 E\r  6 ("@  6  6 ("E\r   6  6   Ar6   j 6    G\r Að\' 6  AÿM@ AøqA(j!Aè\'( "A Avt"qE@Aè\'  r6   (!   6   6   6   6A! AÿÿÿM@ A& Avg"kvAq AtrA>s!   6  B 7 AtA*j!@@Aì\'( "A t"qE@Aì\'  r6    6    6 A AvkA  AGt! ( !@ "(Axq F\r Av! At!  Aqj"("\r    6   6    6    6 ("  6   6  A 6   6   6 A	? ð|# Ak"$ Aà&-  AqE@AAäA\r!Aà&A:  AÜ& 6  ( , " A HAj." ( , " A H""6  @ Aj (    ü\n    6 A 6AÜ&(    Aj Aj! (!   ü6@ E\r AØ+A 6 A AØ+( AØ+A 6 AG\r A +  Aj$ Ú AÈ!Aë\r\'AÔ!Að\nAA &Aà!Aº	AAAÿ Aø!A³	AAAÿ Aì!A±	AA AÿA"AµAA~AÿÿA"A¬AA AÿÿA"AìAAxAÿÿÿÿA¨"AãAA AA´"A¨AAxAÿÿÿÿAÀ"AAA AAÌ"AABBÿÿÿÿÿÿÿÿÿ AØ"AýAB BAä"AýAAð"A»\rAAAÇ%AôAA­A¼AAÓAAAâAè$AÔA Aó	AüA A¸	A¤AA	AÌAAÀ	AôAAß	AAA	AÄAA¤	AìAAÝ	AAAû	AüA A	A¤AAé	AÌAAÌ	AôAAª	AAAÒ	AÄAA°	A¼AA	AäA	Aí	AAAÊ	A´AA¢	@  ("( ( "k"AmAj"AÖªÕªI@  (!AÕªÕª ( kAm"At"   I AªÕªÕ O"AÖªÕªO\r Al"-" j" (6  ) 7  B 7  A 6  ( ( "k"AtmAlj! @   ü\n    Aj"6  6  (   j6 @ )  (  6 N A3" A$6   AÀ$A7 ©# A k"$   A 6  B 7  ( , " A H""@ (   " j!	A !A !@@ ,  "Aÿq"A\nF\r  A F\r  A=F\r @ AÁ k"AÿqAM\r  Aá kAÿqAM@ AÇ k! A0kAÿqA	M@ Aj!A>!@ A+k A?!  Atr! AH@ Aj!   Ak"u":   6  (!   6  Aj6  Aj6@  I@  :   Aj!AØ+A 6 A AjAØ+( AØ+A 6 AG@ (!   ( "@   6  ( )    6 Aj" 	G\r  A j$  #    $    ( Aø\n Aª9@  Ak( "E\r  A&AÈ BE\r   (   Ak( "  Ak C# Ak"$   ( 6    Aj  ( ( " @  (6  Aj$       ( /@    @7    ( /@    @  ("        ( (	 ¤ @   ( /@  (G\r (AF\r  6   (  /E\r @ ( G@  (G\r AG\r A6   6  6   ((Aj6(@ ($AG\r  (AG\r  A: 6 A6, @   ( /@  (G\r (AF\r  6   (  /@@ ( G@  (G\r AG\r A6   6 @ (,AF\r  A ;4  ("    A   ( (	  - 5AF@ A6, - 4E\r A6,  6  ((Aj6( ($AG\r (AG\r A: 6  ("       ( ( 4   ( ((F@   A  ("      ( (    ( ((F@   AÊ# AÐ k"$ @A  ( (F\r A  A¸AèB"E\r  ( "E\r AjA A8ü  A: K A6    6  6 A6D  Aj A ( (  (," AF@  ($6   AF AÐ j$  A6 Aç6 A¿	6 A	 6 \r   ( (F# Ak"$ A    AM" AjApq"    I" AqE@A0  A°K\r A0  A°O@Aä\'A06 A A A  AjAxq  AI"Aj." E\r   Ak!@  AqE@ !   Ak"( "Axq  AjApqAk" AA    kAMj"  k"k! AqE@ ( !   6    j6      (AqrAr6   j" (Ar6   ( AqrAr6   j" (Ar6  M@  ("AqE\r  Axq" AjM\r     AqrAr6   j"  k"Ar6   j" (Ar6  M  Aj" E\r    6A ! A  (  ! Aj$   A !# A k"$ Aä+( " E@Aü+Aô6 Aä+Aü+6 Aü+!  AjAv"Aj!@@@@  Að/F@A !  Aj"Aq\r  /" kAqA   K j" I@    k";   AÿÿqAtj"  ;  A ;   Aj"AqE\r Añ6 A§6 Aÿ	6 A	 6   M\r  / !@ E@Aä+ AtAð+j6   ;   A ;  A j$   Añ6 A6 Aÿ	6A	 Aj6   "/ AtAð+j!      @  Ak"   ( Aj6 ¢# A k"$ # Ak"$ @ Aj"" A j""F\r  A N\r  A-:  A  k! Aj!   k"A	L@A= A  ArgkAÑ	lAv"	  	At(ÀIkAjH\r A¿=M@ AÎ M@ Aã M@ A	M@  A0r:   Aj  At/ð;   Aj AçM@  AÿÿqAä n"A0r:     Aä lkAÿÿqAt/ð;  Aj  = AM@  AÎ n"A0j:   Aj  AÎ lk=  < AÿÁ×/M@ Aÿ¬âM@  AÀ=n"A0j:   Aj  AÀ=lk<  ; AÿëÜM@  AÂ×/n"A0j:   Aj  AÂ×/lk;  AÂ×/n"At/ð;   Aj  AÂ×/lk;!A 6  6  (6  (6 Aj$  ("# Ak"$     kJ!   6 k" @    ü\n     jA :   A: @@ Aj" - E@AØ+A 6   GAØ+( AØ+A 6 AF\rA +  Aj$  $     L" Að%6       J!  Aj"@    ü\n  ¤# A k"$  A÷ÿÿÿI@A\n  (AÿÿÿÿqAk  , A N I@ Aj 8   (  , " A H""6 Aj"@ (  (     ü\n    (6  )7   Aj4 A j$ 0 ½ 5!@   (  , " A H""M@   (AÿÿÿÿqAkA\n " kK@     j k    I @  (    A H!  G@  j!  k"@  j  ü\n    A    jIA   Oj! @  j  ü\n    j!@  , A H@   6   Aÿ q:   jA :  A3! AØ+A 6 A9  Aº!AØ+( AØ+A 6 AG@ Aü%A    :        573# A k"$   (6  )7   Aj4 A j$   ä# A k"$ AØ+A 6   6   Aj" AjAØ+( ! AØ+A 6 @  AG@ ( , " A H"" Aj."  6  (!  @ Aj     ü\n   A H@ ( ) (" A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\r A j$    Aj* A + H 5"A\rj-"A 6  6  6  Aj! Aj"@   ü\n     6     AØ+( E@AÜ+ 6 AØ+  6 û# A k"$  ( "A÷ÿÿÿI@@ A\nM@  :  Aj! Aøÿÿÿq"Aj-!  Aøÿÿÿk6  6  6 @  Aj ü\n    jA :  AØ+A 6    Aj Aj AØ+( AØ+A 6 AG@ ( A 6 , A H@ ( () A j$   , A H@ ( () 0 # A k"$  (!@A\'-  Aq@A\'( !AAA\r!A\'A:  A\' 6   ( 6 A 6  A A  Aj Ajü"6@ ("@AØ+A 6 A AØ+( AØ+A 6 AF\rAØ+A 6 A\'  !AØ+( AØ+A 6 AG@   6 A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r A j$   Aj* A + # A k"$  (!@AÐ\'-  Aq@AÌ\'( !AAÌA\r!AÐ\'A:  AÌ\' 6   ( 6 A 6  A A  Aj Ajü"6@ ("@AØ+A 6 A AØ+( AØ+A 6 AF\rAØ+A 6 A\'  !AØ+( AØ+A 6 AG@   6 A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r A j$   Aj* A + ª|# Ak"$ AÈ\'-  AqE@AAÄA\r!AÈ\'A:  AÄ\' 6  ("A	O@   6 A 6AÄ\'(     Aj Aj@ (" E\r AØ+A 6 A  AØ+( AØ+A 6 AG\r A +  Aj$ ü©|# Ak"$ A¸\'-  AqE@AA´A\r!A¸\'A:  A´\' 6  ("A	O@   6 A 6A´\'(     Aj Aj@ (" E\r AØ+A 6 A  AØ+( AØ+A 6 AG\r A +  Aj$ ¶# Ak"$  A 6 B 7 @@@ ( , " A H"@@ Aj!  ( "  , A H j-  "À"A N@AØ+A 6 A  AØ+( !AØ+A 6   AG\r AàqAÀF@   , A H j-  A?q" AtAÀqr"AkAþ K@AØ+A 6 A  A@rAØ+( AØ+A 6 AF\r Ar!AØ+A 6 A  ÀAØ+( AØ+A 6 AF\r Aj AðqAàF@    , A H"j-  "A?q"At Atr  j- A?q"r"AkAÿÿqAþ K@@ AÿÿqAÿM@AØ+A 6 A  A@rAØ+( AØ+A 6 AG\r	AØ+A 6 A  AàqAvA`rAØ+( AØ+A 6 AF\rAØ+A 6 A  ArAØ+( AØ+A 6 AF\r Ar!AØ+A 6 A  ÀAØ+( AØ+A 6 AF\r Aj   , A H" j"- !	 - !  j-  !AØ+A 6 A AmAØ+( AØ+A 6 AF\rAØ+A 6 A  AtAð q A?qAtrAüj"AvA?qA sAØ+( AØ+A 6 AF\rAØ+A 6 A   A0qAtrA\nvA?qArAØ+( AØ+A 6 AF\rAØ+A 6 A AmAØ+( AØ+A 6 AF\rAØ+A 6 A  AqA°rAØ+( AØ+A 6 AF\rAØ+A 6 A  	A?qArAØ+( AØ+A 6 AF\r Aj"K\r  , A H\r   (6   ) 7 AØ+A 6 A6   (  (AØ+( AØ+A 6 AF\r , A N\r  ( ( ) Aj$   , A H@ ( ( ) ¨|# Ak"$ A¨\'-  AqE@AAÐA\r!A¨\'A:  A¤\' 6  ("A	O@   6 A 6A¤\'(    Aj Aj!  ("6 @@ ü"( "A÷ÿÿÿO@AØ+A 6 A5AØ+( AØ+A 6 AF\r @ A\nM@   : AØ+A 6 A\n AøÿÿÿqAj"!AØ+( AØ+A 6 AF\r   6   6    Axr6 !  @   Aj ü\n     jA :   @AØ+A 6 A AØ+( AØ+A 6 AF\r Aj$  @@ ( "@AØ+A 6 A AØ+( AØ+A 6 AF\rA +  A + «D~}|# A@j"$   (!A	\n!AØ+A 6   6,A\'  !AØ+( !AØ+A 6 @@@@@@@@@@@@@@@@@@@@@@@@@@@ AG@  6 @ A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r ( !AØ+A 6 A( A  Aj!AØ+( AØ+A 6 AF\r ( "A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r@ E\r   (!Aî\n\n!AØ+A 6   6 A\'  !AØ+( AØ+A 6 AF\r  68 A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r (8!AØ+A 6 A* A(j A  A4jAØ+( AØ+A 6 AF\r (8"A	O@AØ+A 6 A AØ+( AØ+A 6 AF\rAØ+A 6 A+ Aj" A(jAØ+( AØ+A 6 AF\rAØ+A 6   (  , \'" A H"At AþqAvr; 4A,  A4jAAØ+( AØ+A 6 AF\rAØ+A 6 A,  (  , \'"A H" (   AØ+( AØ+A 6 AF\r , \'A H@ ($ () , 3A N\r  (0 (() Ak	\n\r ! ! , \'A N\r ($ ()  (!A\n! AØ+A 6    6,A\'   !AØ+( !AØ+A 6 @ AG@  6   A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\rAØ+A 6 A( A  Aj! AØ+( !AØ+A 6 @ AF\r AØ+A 6 A   ÀAØ+( AØ+A 6 AF\r  ( " A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\r  (!A\n! AØ+A 6    6,A\'   !AØ+( !AØ+A 6 @ AG@  6   A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\rAØ+A 6 A( A  Aj! AØ+( !AØ+A 6 @ AF\r AØ+A 6    At  AþqAvr; (A,  A(jAAØ+( AØ+A 6 AF\r  ( " A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\r  (!A\n! AØ+A 6    6,A\'   !AØ+( !AØ+A 6 @ AG@  6   A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\rAØ+A 6 A( A  Aj! AØ+( !AØ+A 6 @ AF\r AØ+A 6      AxsAþxqAv  Axs6 (A,  A(jAAØ+( AØ+A 6 AF\r  ( " A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\r  (! A\n!AØ+A 6   6,A\'   ! AØ+( !AØ+A 6 @ AG@   6  A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r@A°\'-  AqE@AØ+A 6 AAA¬A!AØ+( AØ+A 6 AF\rA°\'A:  A¬\' 6   A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\r   6(AØ+A 6  A 64A-A¬\'(   A  A4j A(j!AØ+( AØ+A 6 AF\r  (4"@AØ+A 6 A AØ+( AØ+A 6 AF\rAØ+A 6   B8 BþB( BüB BøB BBø BBü B(Bþ B87 (A,  A(jAAØ+( AØ+A 6 AF\r   A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\r  (!A\n! AØ+A 6    6,A\'   !AØ+( !AØ+A 6 @ AG@  6   A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\rAØ+A 6 A. A  Aj !AØ+( AØ+A 6 AG@ ( " A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\r  ¼"   AxsAþxqAv  Axs6 (  A(jA7\r  (! A\n!AØ+A 6   6,A\'   ! AØ+( !AØ+A 6 @ AG@   6  A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r@AÀ\'-  AqE@AØ+A 6 AAA¼A!AØ+( AØ+A 6 AF\rAÀ\'A:  A¼\' 6   A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\r   6(AØ+A 6  A 64A\rA¼\'(   A  A4j A(j!	AØ+( AØ+A 6 AF\r  (4"@AØ+A 6 A AØ+( AØ+A 6 AF\r  A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\r  	½"B8 BþB( BüB BøB BBø BBü B(Bþ B87 (  A(jA7  (!A\n! AØ+A 6    68A\'   !AØ+( !AØ+A 6 @ AG@  6  A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\r\rAØ+A 6 A* Aj"  A  AjAØ+( !AØ+A 6 @@@@ AG@AØ+A 6 A+ A(j"  AØ+( AØ+A 6 AF\rAØ+A 6   (, , 3"   A H" At  AþqAvr; 4A,  A4jAAØ+( AØ+A 6 AF\rAØ+A 6 A,  ((  , 3" A H" (,   AØ+( AØ+A 6 AF\r , 3A H@ (0 (() , \'A H@ ($ () (" A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\r ! ! ! , 3A N\r  (0 (() , \'A N\r  ($ () Aj*  (!A\n! AØ+A 6    6 A\'   !AØ+( !AØ+A 6 @ AG@  68  A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\r\rAØ+A 6 A* A(j A  A4jAØ+( ! AØ+A 6 @@@  AG@ (8" A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\rAØ+A 6 A/ Aj A(jAØ+( AØ+A 6 AF\rAØ+A 6   (  (k"   AxsAþxqAv  Axs6 4A,  A4jAAØ+( AØ+A 6 AF\rAØ+A 6 A,  ("  (   kAØ+( AØ+A 6 AF\r (" @   6  ($  ) , 3A N\r\r (0 (()\r ! ! (" E\r    6  ($  )  (! A\n!AØ+A 6   6,A\'   ! AØ+( !AØ+A 6 @@@@@@@@ AG@   6 @ A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r ( ! AØ+A 6 AAñ!AØ+( AØ+A 6 AF\rAØ+A 6   6,A\'   ! AØ+( AØ+A 6 AF\r   68 A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! A(j*AØ+A 6 A0  A  A4j! AØ+( AØ+A 6 AF\r (8"A	O@AØ+A 6 A AØ+( AØ+A 6 AF\rAØ+A 6      AxsAþxqAv  Axs6 (A,  A(jAAØ+( AØ+A 6 AF\r A 6  @@AØ+A 6 A1 A(j" Aj AjAØ+( AØ+A 6 AF\rAØ+A 6 A( (,A  !AØ+( AØ+A 6 AF\rAØ+A 6    AxsAþxqAv Axs6 4A,  A4jAAØ+( AØ+A 6 AF\r (,"A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r  (Aj"6   K\r  ( " A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\r ! ! A4j* ! ! ! A(j*  (! A\n!AØ+A 6   6,A\'   ! AØ+( !AØ+A 6 @@@@@@@ AG@   6 @ A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r ( ! AØ+A 6 AAñ!AØ+( AØ+A 6 AF\rAØ+A 6   6,A\'   ! AØ+( AØ+A 6 AF\r   68 A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r (8! AØ+A 6 A0  A  A4j! AØ+( AØ+A 6 AF\r (8"A	O@AØ+A 6 A AØ+( AØ+A 6 AF\rAØ+A 6      AxsAþxqAv  Axs6 (A,  A(jAAØ+( AØ+A 6 AF\r A 6  @@AØ+A 6 A1 A4j Aj AjAØ+( AØ+A 6 AF\r (8"!A°\'-  AqE@AØ+A 6 AAA¬A!AØ+( AØ+A 6 AF\r\nA°\'A:  A¬\' 6  (8! A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r\n  6(AØ+A 6  A 6A-A¬\'(  A  Aj A(j!AØ+( AØ+A 6 AF\r	 ("@AØ+A 6 A AØ+( AØ+A 6 AF\rAØ+A 6   B8 BþB( BüB BøB BBø BBü B(Bþ B87 (A,  A(jAAØ+( AØ+A 6 AF\r	 (8"A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r  (Aj"6   K\r  ( " A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\r ! A(j* ! ! A4j* ! ! ! A4j*\r  (!Að\n!AØ+A 6   6,A\'  !AØ+( !AØ+A 6 @@@@@@@@ AG@  6 @ A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r ( !AØ+A 6 A( A  Aj!AØ+( AØ+A 6 AF\r ( "A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r  À,  (! A\n!AØ+A 6   6,A\'   ! AØ+( AØ+A 6 AF\r   6  A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r ( ! AØ+A 6 AAñ!AØ+( AØ+A 6 AF\rAØ+A 6   6,A\'   ! AØ+( AØ+A 6 AF\r   68 A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! A(j*AØ+A 6 A0  A  A4j! AØ+( AØ+A 6 AF\r (8"A	O@AØ+A 6 A AØ+( AØ+A 6 AF\rAØ+A 6      AxsAþxqAv  Axs6 (A,  A(jAAØ+( AØ+A 6 AF\r A 64  @@AØ+A 6 A1 A(j" Aj A4jAØ+( AØ+A 6 AF\rAØ+A 6 A)  A AØ+( AØ+A 6 AF\r (,"A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r  (4Aj"64   K\r  ( " A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\r\r ! ! A4j* ! ! ! A(j*  (! A\n!AØ+A 6   6,A\'   ! AØ+( AØ+A 6 AF\r   68 A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r (8! AØ+A 6 AAñ!AØ+( AØ+A 6 AF\rAØ+A 6   6,A\'   ! AØ+( AØ+A 6 AF\r   6  A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r ( ! AØ+A 6 A0  A  Aj!AØ+( AØ+A 6 AF\r ( " A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\r A 6@@@@@@@@@@@@@@@ @@AØ+A 6 A1 Aj"  A4j AjAØ+( AØ+A 6 AF\rAØ+A 6  A6A2 Aj   AjAØ+( AØ+A 6 AF\rAØ+A 6  (! AA	!AØ+( AØ+A 6 AF\rAØ+A 6   6,A\'   ! AØ+( !AØ+A 6 @ AG@   6 @ A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r ( ! AØ+A 6 A(  A  Aj! AØ+( AØ+A 6 AF\rAØ+A 6 A   ÀAØ+( AØ+A 6 AF\r ( " A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\r ! A(j* (" A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\rAØ+A 6  A 6A2 Aj"  Aj AjAØ+( AØ+A 6 AF\rAØ+A 6 A* Aj" (A   AØ+( AØ+A 6 AF\rAØ+A 6 A+ A(j"  AØ+( AØ+A 6 AF\r	AØ+A 6   (, , 3" A H"At AþqAvr; >A,  A>jAAØ+( AØ+A 6 AF\r\nAØ+A 6 A,  ((   , 3" A H" (,   AØ+( AØ+A 6 AF\r\n , 3A H@ (0 (() , \'A H@ ($ () (" A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\rAØ+A 6  A6A2 A(j"  Aj AjAØ+( AØ+A 6 AF\r\rAØ+A 6 A)   A AØ+( AØ+A 6 AF\r (," A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\r (" A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\r  (Aj" 6   I\r AØ+A 6 A A AØ+( AØ+A 6 AF\r (8" A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\r ! ! ! ! Aj* Aj* ! ! ! ! , 3A N\r  (0 (() , \'A N\r  ($ () Aj* ! ! A(j* Aj* !A3!AØ+A 6 A A(jAÔ! AØ+( !AØ+A 6 @@ AG@AØ+A 6 A! Aj" AØ+( !AØ+A 6 @@ AG@AØ+A 6 A,   (  , \'"A H" (   !AØ+( AØ+A 6 A!AG@  (6  ) 7  B 7  A 6AØ+A 6 A3 AA4AØ+( AØ+A 6 A !AG\r ! , \'A H@ ($ ()  , A H\r !A!  , A N\r  (  ( ) E\r ! :  ! Aj* ! ! A(j* A4j* A@k$ A +   A(j*   Aj*   A4j*  , 3A N\r (0 (() Aj*  , AÉ\rAAÜAËAAA A AÂ\rAAÐAØAAA A ª|# Ak"$ AØ\'-  AqE@AA¤A\r!AØ\'A:  AÔ\' 6  ("A	O@   6 A 6AÔ\'(     Aj Aj@ (" E\r AØ+A 6 A  AØ+( AØ+A 6 AG\r A +  Aj$ ü# A k"$  A 6 B 7 (!AØ+A 6 AA	!AØ+( !AØ+A 6 @@@@ AG@AØ+A 6   6A\'  !AØ+( !AØ+A 6 @ AG@  6 A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r !  Aj*AØ+A 6 A( A  !AØ+( AØ+A 6 AF\r ("A	O@AØ+A 6 A AØ+( AØ+A 6 AF\rAØ+A 6 A Aj" ÀAØ+( AØ+A 6 AF\rAØ+A 6 A)  AAØ+( AØ+A 6 AF\rAØ+A 6 A   (  , " A H" (   AØ+( AØ+A 6 AF\r , A H@ ( () A j$  !  !  * !  , A H@ ( ()A +    # Ak"$   (!  \n" 6 (!AØ+A 6 A    AØ+( !AØ+A 6 @ AG@  A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\r Aj$   Aj* A + # A k"$   (!@A\'-  Aq@A\'( ! AAA\r! A\'A:  A\'  6   ( 6 A 6   A A  Aj Ajü" 6@ ("@AØ+A 6 A AØ+( AØ+A 6 AF\r (!AØ+A 6 A    AØ+( AØ+A 6 AG@  A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\r A j$   Aj* A + ð|# Ak"$ A \'-  AqE@AA¤A\r!A \'A:  A\' 6  ( , " A HAj." ( , " A H""6  @ Aj (    ü\n    6 A 6A\'(    Aj Aj! (!   ü6@ E\r AØ+A 6 A AØ+( AØ+A 6 AG\r A +  Aj$   A 6  B 7 AØ+A 6 A   AjAnAtAØ+( AØ+A 6 AG@@ @@  j-  At! Aj" O"E@  j-  At r! Aj" O"E@   j-  r!AØ+A 6 A   Av, àAØ+( AØ+A 6 AF\rAØ+A 6 A   AvA?q, àAØ+( AØ+A 6 AF\rA=! E@ AvA?q, à!AØ+A 6 A   ÀAØ+( AØ+A 6 AF\rA=! E@ A?q, à!AØ+A 6 A   ÀAØ+( AØ+A 6 AF\r Aj" I\r    , A H@  (  ( ) # Ak"$  A A  O  (!AØ+A 6 A ! AØ+( !AØ+A 6 @@ AG@   6AØ+A 6 A    (AØ+( !AØ+A 6 @ AG@  A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\r ! Aj* (" A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\r Aj$  ! *  A + ý# A k"$ @Aè&-  Aq@Aä&( !AAìA\r!Aè&A:  Aä& 6   6 A 6  A A  Aj Ajü"6@ ("@AØ+A 6 A AØ+( AØ+A 6 AF\r  (!AØ+A 6 A ! AØ+( !AØ+A 6 @ AG@AØ+A 6    6A    AØ+( !AØ+A 6 @ AG@  A	I\rAØ+A 6 A  AØ+( AØ+A 6 AG\r ! Aj* A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r A j$  ! Aj*  A +   @ Aÿ M\r  AÿM@   AvA@r, A?qAr! AÿÿM@   AvA`r,   AvA?qAr, A?qAr!   AvApr,   AvA?qAr,   AvA?qAr, A?qAr!   À,y 5"A÷ÿÿÿI@@ A\nM@   :   ! Aøÿÿÿq"Aj-!   Aøÿÿÿk6   6   6  @   ü\n    jA :    0 # A k"$    ("6  (!   6  6  Aj6    I@  (6  ) 7  B 7  A 6 Aj AjQ (6 A j$ ¯  ("( ( "k"Aj"A N@  (! Aÿÿÿÿ ( k"At"   I AÿÿÿÿO" -A "j" -  :   @   ü\n     j6  Aj"6  6  @ )  (  6 N ðZ~|# AÐ k"$   6AØ+A 6 A  A	 AØ+( !AØ+A 6 @@@@@@@@@@@@@@@@ AF\r AØ+A 6 A  Aî\n AØ+( AØ+A 6 AF\r @@@@@@@@@@@@@ Ak \n	 ("Aj" (K@AØ+A 6 A\nA!AØ+( !AØ+A 6 @ AG@ B74  60 A÷)  7  Añ)  7   A :   ("6  (!  6H  A0j6D  A j6@   I@  (86  )07  B 70 A 68 AjAØ+A 6 A A@kAØ+( AØ+A 6 AF\r ( 6 , ;A N\r (8 (0) ! ! , ;A N\r (8 (0) (  j,  !  6AØ+A 6 A  A AØ+( AØ+A 6 AG\r ! ("Aj" (K@AØ+A 6 A\nA!AØ+( !AØ+A 6 @ AG@ B74  60 A£)  7  A)  7   A :   ("6  (!  6H  A0j6D  A j6@   I@  (86  )07  B 70 A 68 AjAØ+A 6 A A@kAØ+( AØ+A 6 AF\r ( 6 , ;A N\r (8 (0) ! ! , ;A N\r (8 (0) (  j/  !  6AØ+A 6 A  A At AvrÁAØ+( AØ+A 6 AG\r ! ("Aj" (K@AØ+A 6 A\nA!AØ+( !AØ+A 6 @ AG@ B74  60 AÚ)  7  AÕ)  7   A : \r  ("6  (!  6H  A0j6D  A j6@   I@  (86  )07  B 70 A 68 AjAØ+A 6 A A@kAØ+( AØ+A 6 AF\r ( 6 , ;A N\r (8 (0) ! ! , ;A N\r (8 (0) (  j(  !  6AØ+A 6 A  A  AxsAþxqAv AxsAØ+( AØ+A 6 AG\r ! ("Aj" (K@AØ+A 6 A\nA!AØ+( !AØ+A 6 @ AG@ B74  60 A)  7  A)  7   A :   ("6  (!  6H  A0j6D  A j6@   I@  (86  )07  B 70 A 68 AjAØ+A 6 A A@kAØ+( AØ+A 6 AF\r ( 6 , ;A N\r (8 (0) ! ! , ;A N\r (8 (0) (  j)  !  6@Að&-  Aq@Aì&( !AØ+A 6 AAAôA!AØ+( AØ+A 6 AF\rAð&A:  Aì& 6   B8 BþB( BüB BøB BBø BBü B(Bþ B87@AØ+A 6  A 6 A\r A A  A j A@k!AØ+( AØ+A 6 AF\r  ü"64 ( "@AØ+A 6 A AØ+( AØ+A 6 AF\r  (!AØ+A 6 AA!AØ+( !AØ+A 6 @ AG@AØ+A 6   6DA   AØ+( !AØ+A 6 @ AG@ A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! A@k* A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! A0j* ("Aj" (K@AØ+A 6 A\nA!AØ+( !AØ+A 6 @ AG@ B74  60 Aú)  7  Aó)  7   A :   ("6  (!  6H  A0j6D  A j6@   I@  (86  )07  B 70 A 68 AjAØ+A 6 A A@kAØ+( AØ+A 6 AF\r ( 6 , ;A N\r (8 (0) ! ! , ;A N\r (8 (0) (  j(  !  6@@@@Aø&-  Aq@Aô&( !AØ+A 6 AAAüA!AØ+( AØ+A 6 AF\rAø&A:  Aô& 6    AxsAþxqAv Axs¾»9@AØ+A 6  A 6 A\r A A  A j A@k!AØ+( AØ+A 6 AF\r   ü"64 ( "@AØ+A 6 A AØ+( AØ+A 6 AF\r  (!AØ+A 6 AA!AØ+( AØ+A 6 AF\rAØ+A 6   6DA   AØ+( !AØ+A 6 @ AG@ A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! A@k* A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! ! A0j* ("Aj" (K@AØ+A 6 A\nA!AØ+( !AØ+A 6 @ AG@ B74  60 A¹\r)  7  A±\r)  7   A :   ("6  (!  6H  A0j6D  A j6@   I@  (86  )07  B 70 A 68 AjAØ+A 6 A A@kAØ+( AØ+A 6 AF\r ( 6 , ;A N\r (8 (0) ! ! , ;A N\r (8 (0) (  j)  !  6@@@@A\'-  Aq@Aü&( !AØ+A 6 AAAA!AØ+( AØ+A 6 AF\rA\'A:  Aü& 6   B8 BþB( BüB BøB BBø BBü B(Bþ B87@AØ+A 6  A 6 A\r A A  A j A@k!AØ+( AØ+A 6 AF\r   ü"64 ( "@AØ+A 6 A AØ+( AØ+A 6 AF\r  (!AØ+A 6 AA!AØ+( AØ+A 6 AF\rAØ+A 6   6DA   AØ+( !AØ+A 6 @ AG@ A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! A@k* A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! ! A0j* A 6H B 7@AØ+A 6 A  A@k" !AØ+( !AØ+A 6 @ AG@ E\rAØ+A 6 A  A AØ+( AØ+A 6 AG\r ! , KA N\r (H (@) , KA N\r (H (@) ("Aj" ("K@AØ+A 6 A\nA !AØ+( !AØ+A 6 @ AG@ B74  60 AÛ(  6  AÔ)  7  AÌ)  7  AÄ)  7   A :   ("6  (!  6H  A0j6D  A j6@   I@  (86  )07  B 70 A 68 AjAØ+A 6 A A@kAØ+( AØ+A 6 AF\r ( 6 , ;A N\r (8 (0) ! ! , ;A N\r (8 (0) ( " j(  !  6   AxsAþxqAv Axs" jI@AØ+A 6 A A@kAì!AØ+( !AØ+A 6 @ AG@AØ+A 6 A  AØ+( AØ+A 6 AF\r , A N\r ( ( ) ! ! , A N\r ( ( )AØ+A 6 A A@k"  j AØ+( !AØ+A 6 @ AG@AØ+A 6 A  A AØ+( AØ+A 6 AF\r , KA H@ (H (@)  ( j6 ! ! , KA N\r (H (@) ("Aj" (K@AØ+A 6 A\nA !AØ+( !AØ+A 6 @ AG@ B74  60 A¥/  ;  A)  7  A)  7  A)  7   A :   ("6  (!  6H  A0j6D  A j6@   I@  (86  )07  B 70 A 68 AjAØ+A 6 A A@kAØ+( AØ+A 6 AF\r ( 6 , ;A N\r (8 (0) ! ! , ;A N\r (8 (0) (  j"- ! -  ! - !	 - !  6AØ+A 6 A !AØ+( AØ+A 6 AF\r  6$@@ 	At Atr Atr r"	E\r A !@ ("Aj" (K@AØ+A 6 A\nA !AØ+( !AØ+A 6 @ AG@ B74  60 AÉ)  7  AÁ)  7  A¹)  7   A :   ("6 (!  6H  A0j6D  Aj6@   I@  (86  )07  B 70 A 68 AjAØ+A 6 A A@kAØ+( AØ+A 6 AF\r (6 , ;A N\r (8 (0) ! ! , ;A N\r (8 (0) (  j(  !  6@@@@A\'-  Aq@A\'( !AØ+A 6 AAAA!AØ+( AØ+A 6 AF\rA\'A:  A\' 6    AxsAþxqAv Axs6@AØ+A 6  A 6A\r A A  Aj A@k!AØ+( AØ+A 6 AF\r   ü"64 ("@AØ+A 6 A AØ+( AØ+A 6 AF\rAØ&-  AqE@AØ+A 6 AAAÜA!AØ+( AØ+A 6 AF\rAØ&A:  AÔ& 6  A	I"E@AØ+A 6 A AØ+( AØ+A 6 AF\r  6@AØ+A 6  A 6A\rAÔ&(  Aø Aj A@kAØ+( AØ+A 6 AF\r ("@AØ+A 6 A AØ+( AØ+A 6 AF\r \rAØ+A 6 A AØ+( AØ+A 6 AG\r ! ! A0j* Aj" 	G\r   (!AØ+A 6 AA!AØ+( AØ+A 6 AG@AØ+A 6   6DA   AØ+( !AØ+A 6 @ AG@ A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! A@k* A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! A j* ("Aj" (K@AØ+A 6 A\nA !AØ+( !AØ+A 6 @ AG@ B74  60 A¿(  6  A¸)  7  A°)  7  A¨)  7   A :   ("6  (!  6H  A0j6D  A j6@   I@  (86  )07  B 70 A 68 AjAØ+A 6 A A@kAØ+( AØ+A 6 AF\r ( 6 , ;A N\r (8 (0) ! ! , ;A N\r (8 (0) (  j"- ! -  ! - !	 - !  6AØ+A 6 A !AØ+( AØ+A 6 AF\r  6$@@ 	At Atr Atr r"E\r A !@ ("Aj"	 (K@AØ+A 6 A\nA !AØ+( !AØ+A 6 @ AG@ B74  60 Aê-  :  Aâ)  7  AÚ)  7  AÒ)  7   A :   ("6 (!  6H  A0j6D  Aj6@   I@  (86  )07  B 70 A 68 AjAØ+A 6 A A@kAØ+( AØ+A 6 AF\r (6 , ;A N\r (8 (0) ! ! , ;A N\r (8 (0) (  j)  !  	6@@@@A\'-  Aq@A\'( !AØ+A 6 AAAA!AØ+( AØ+A 6 AF\rA\'A:  A\' 6   B8 BþB( BüB BøB BBø BBü B(Bþ B87@AØ+A 6  A 6A\r A A  Aj A@k!AØ+( AØ+A 6 AF\r   ü"64 ("	@AØ+A 6 A 	AØ+( AØ+A 6 AF\rAØ&-  AqE@AØ+A 6 AAAÜA!	AØ+( AØ+A 6 AF\rAØ&A:  AÔ& 	6  A	I"	E@AØ+A 6 A AØ+( AØ+A 6 AF\r  6@AØ+A 6  A 6A\rAÔ&(  Aø Aj A@kAØ+( AØ+A 6 AF\r ("@AØ+A 6 A AØ+( AØ+A 6 AF\r 	\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! ! A0j* Aj" G\r   (!AØ+A 6 AA!AØ+( AØ+A 6 AG@AØ+A 6   6DA   AØ+( !AØ+A 6 @ AG@ A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! A@k* A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! A j* ("Aj" ("K@AØ+A 6 A\nA!AØ+( !AØ+A 6 @ AG@ B74  60 A¨	)  7 \r A£	)  7  A	)  7   A :   ("6  (!  6H  A0j6D  A j6@   I@  (86  )07  B 70 A 68 AjAØ+A 6 A A@kAØ+( AØ+A 6 AF\r ( 6 , ;A N\r (8 (0) ! ! , ;A N\r (8 (0) ( "	 j-  !  6  Aj"I@AØ+A 6 A A@kAÀ!AØ+( !AØ+A 6 @ AG@AØ+A 6 A  AØ+( AØ+A 6 AF\r , A N\r ( ( ) ! ! , A N\r ( ( )  	j"- ! - ! -  -  !  6AØ+A 6 A  Að AØ+( AØ+A 6 AF\rAØ+A 6 A !AØ+( AØ+A 6 AF\r  6$At Atr Atr r"E\r\n AM@A !@@@ ( (F\rAØ+A 6  A : @ A : KA Aj   A@k AØ+( AØ+A 6 AG@ ($!	AØ&-  AqE@AØ+A 6 AAAÜA!AØ+( AØ+A 6 AF\rAØ&A:  AÔ& 6  ("A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r  60AØ+A 6  A 6A\rAÔ&(  	Aø Aj A0jAØ+( AØ+A 6 AF\r@ ("E\r AØ+A 6 A AØ+( AØ+A 6 AG\r  ("A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r , KA H@ (H (@) Aj" G\r ! ! Aj* , KA N\r (H (@) ( (G\r	\nAØ+A 6 A !AØ+( !AØ+A 6 @@ AG@  6@@@@@@@@@@@ (" ("F\r   Aj"I@AØ+A 6 A\nA !AØ+( !AØ+A 6 @ AG@ B74  60 Aè\r/  ;  Aà\r)  7  AØ\r)  7  AÐ\r)  7   A :   ("6  (!  6H  A0j6D  A j6@   I@  (86  )07  B 70 A 68 AjAØ+A 6 A A@kAØ+( AØ+A 6 AF\r ( 6 , ;A N\r (8 (0) ! ! , ;A N\r (8 (0) (  j-  !  6 E\r  A\rO@AØ+A 6 A! Aj" AØ+( !AØ+A 6 @@@@@ AG@AØ+A 6 A" A AÂ!AØ+( AØ+A 6 AF\r  (6(  ) 7  B 7  A 6AØ+A 6 A# A jAð\r!AØ+( AØ+A 6 AF\r  (68  ) 70 B 7  A 6  ("6< (!  6H  A0j6D  A<j6@   I@  (86  )07  B 70 A 68 AjAØ+A 6 A A@kAØ+( AØ+A 6 AF\r (<6 , ;A H@ (8 (0) , +A H@ (( ( ) , A N\r ( () ! ! ! ! , ;A N\r  (8 (0) , +A N\r  (( ( ) , A N\r ( () A 6H B 7@AØ+A 6 A  A@k" !AØ+( AØ+A 6 AF\r@ E\r AØ+A 6 A !AØ+( AØ+A 6 AF\r  6$ A 6AØ+A 6 A$ A0j"A A  AØ+( AØ+A 6 AF\rAØ+A 6 A% A j Aj AØ+( AØ+A 6 AF\r (4"A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r AØ+A 6  A6A A0j"   A@k AØ+( AØ+A 6 AF\rAØ+A 6 A% A j Aj AØ+( AØ+A 6 AF\r (4"A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r  (!AØ&-  AqE@AØ+A 6 AAAÜA!AØ+( AØ+A 6 AF\r	AØ&A:  AÔ& 6  ($"A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r	  60AØ+A 6  A 6A\rAÔ&(  Aø Aj A0jAØ+( AØ+A 6 AF\r ("@AØ+A 6 A AØ+( AØ+A 6 AF\r  ($"A	I\r AØ+A 6 A AØ+( AØ+A 6 AF\r , KA H@ (H (@) \r  (!AØ+A 6 AA!AØ+( AØ+A 6 AF\r\n  6DAØ+A 6 A   (AØ+( AØ+A 6 AF\r A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! ! ! A0j* ! ! A0j* ! A j* ! A@k* (" A	I\r\rAØ+A 6 A  AØ+( AØ+A 6 AG\r\r ! ! Aj*AØ+A 6 A! A j" AØ+( !AØ+A 6 @@@ AG@AØ+A 6 A" A AÜ!AØ+( AØ+A 6 AF\r  (68  ) 70 B 7  A 6  ("6 (!  6H  A0j6D  Aj6@   I@  (86  )07  B 70 A 68 AjAØ+A 6 A A@kAØ+( AØ+A 6 AF\r (6 , ;A H@ (8 (0) , +A N\r\r (( ( )\r ! ! ! , ;A N\r  (8 (0) , +A N\r (( ( ) !\r ! ! !\n ! , KA N\r  (H (@) Aj*AØ+A 6 A A@kA\r!AØ+( !AØ+A 6 @ AG@AØ+A 6 A  AØ+( AØ+A 6 AF\r , A N\r ( ( ) ! ! , A N\r ( ( )AØ+A 6 A&  A A j"AØ+( AØ+A 6 AF\r * AÐ j$  ! A j* ! !  *  A + ©\n# A k"$ @@@  ("Aj"  ("K@A-!  B7   6   Aï)  7   Aè)  7   Aà)  7    A :   (" 6 (!  6  6  Aj6@    I@   (6   ) 7  B 7  A 6  AjAØ+A 6 A AjAØ+( AØ+A 6 AF\r (6 , A H@ ( ( )A  ! , A N\r  ( " j"- ! -  !   6   Atr" jI@A-!  B7   6   A)  7 \r  A)  7   A)  7    A :   (" 6 (!  6  6  Aj6@    I@   (6   ) 7  B 7  A 6  AjAØ+A 6 A AjAØ+( AØ+A 6 AF\r (6 , A H@ ( ( )A  ! , A N\rA ! A 6 B 7AØ+A 6 A Aj AØ+( AØ+A 6 AF\r @  j!@ "Aj!@  j"-  "À"	A H@ AàqAÀF@  j-  !AØ+A 6 A Aj AtAÀq A?qrAØ+( AØ+A 6 AF\r Aj! AðqAàF@ AtAàq  j-  A?qAtr"	 - A?qr! Aj!@ 	AøqA°G\r  Aj"	 K\r   j-  "\nAðqAàG\r  \nAtAàq"\n - A?qAtr"A¸I\r  \nAÿ¿K\r   	j-  !AØ+A 6 A Aj A\nt j A?qjA¸ÿkAØ+( AØ+A 6 AF\r Aj!AØ+A 6 A Aj AØ+( AØ+A 6 AG\rAØ+A 6 A Aj"AoAØ+( AØ+A 6 AF\rAØ+A 6 A A¿AØ+( AØ+A 6 A½!	AF\rAØ+A 6 A Aj 	ÀAØ+( AØ+A 6 AF\r  I\r  , A H@ ( ( ) A 6 B 7   (6  )7     ( j6A A j$  ! , A N\r  ( ()   ( ( )  ¥# A k"$   "6@@@@ ( " ("G@@AØ+A 6 A AjA A  AØ+( AØ+A 6 AF\rAØ&-  AqE@AØ+A 6 AAAÜA!AØ+( AØ+A 6 AF\rAØ&A:  AÔ& 6  ("A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r  6AØ+A 6  A 6A\rAÔ&(  Aø Aj AjAØ+( AØ+A 6 AF\r ("@AØ+A 6 A AØ+( AØ+A 6 AF\r ("A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r Aj" G\r  A j$  ! ! Aj*  *  A + Æ|# Aà k"$  AÄ j R A 6@  (D"68  (H" k6< A 60 B 7(  : 4@@@@  F@AØ+A 6 A\nA !AØ+( !AØ+A 6 @@@@@@@@@ AG@ A :  A-  :  A)  7  A)  7  A)  7  AØ+A 6 A\nA!AØ+( AØ+A 6 AF\r B7  6   Aj"60  6(  6,AØ+A 6 A!AØ+( AØ+A 6 AF\r   6@Aà\'-  Aq@AÜ\'( !AØ+A 6 AAA¬A!AØ+( AØ+A 6 AF\rAà\'A:  AÜ\' 6  A 6PAØ+A 6  A 6A\r A A  Aj AÐ j!AØ+( AØ+A 6 AF\r  ü"6 ("@AØ+A 6 A AØ+( AØ+A 6 AF\r  (!AØ+A 6 AAõ\n!AØ+( AØ+A 6 AF\rAØ+A 6   6TA   AØ+( !AØ+A 6 @ AG@ A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! AÐ j* A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r A6  (!AØ+A 6 AA»!AØ+( AØ+A 6 AF\rAØ+A 6   6TA  AAØ+( !AØ+A 6 @ AG@ A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! AÐ j* ("A	O@AØ+A 6 A AØ+( AØ+A 6 AF\rAØ+A 6 A Aj A(jAØ+( AØ+A 6 AF\r  (!AØ+A 6 AA	!AØ+( AØ+A 6 AF\r  6TAØ+A 6 A   (AØ+( !AØ+A 6 @ AG@ A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! AÐ j*\n (" A	I\r\rAØ+A 6 A  AØ+( AØ+A 6 AF\r\r ! ! )\n !  *	 ! Aj*  * ! Aj*  * !  * ! Aj*  * -  !AØ+A 6  A6@ A 6  B 7A A8j Aj A(j"!AØ+( !AØ+A 6 @@@@@@@@@@@@@@@ AG@@ \r AØ+A 6 A\nA !AØ+( AØ+A 6 AF\r B7  6 A¨\r)  7  A \r)  7  A\r)  7   A :   (,"6  (0!  6X  Aj6T  6P   I@  (6  )7  B 7 A 6 AjAØ+A 6 A AÐ jAØ+( AØ+A 6 AF\r ( 6, , A N\r  ( ()AØ+A 6 A Aj A8j  Aj A(jAØ+( AØ+A 6 AF\rAØ+A 6 A!AØ+( AØ+A 6 AF\r   6Aà\'-  AqE\rAÜ\'( ! ! !\r ! , A N\r ( ()AØ+A 6 AAA¬A!AØ+( AØ+A 6 AF\rAà\'A:  AÜ\' 6 AØ+A 6  A6P A 6\\A\r A A  AÜ j AÐ j!AØ+( AØ+A 6 AF\r  ü"6 (\\"@AØ+A 6 A AØ+( AØ+A 6 AF\r  (!AØ+A 6 AAõ\n!AØ+( AØ+A 6 AF\rAØ+A 6   6TA   AØ+( !AØ+A 6 @ AG@ A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! AÐ j* *	 A	O@AØ+A 6 A AØ+( AØ+A 6 AF\r  (!AØ+A 6 AA»!AØ+( AØ+A 6 AF\r  6TAØ+A 6 A   (AØ+( !AØ+A 6 @ AG@ A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! AÐ j*	AØ+A 6 A  A(jAØ+( AØ+A 6 AF\r  (!AØ+A 6 AA	!AØ+( AØ+A 6 AF\r  6TAØ+A 6 A   (AØ+( !AØ+A 6 @ AG@ A	I\rAØ+A 6 A AØ+( AØ+A 6 AG\r ! AÐ j* (" A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\r (" A	O@AØ+A 6 A  AØ+( AØ+A 6 AF\r , #A N\r\r (  ()\r !	 ! ! ! * ! ! ! *  * Aj* , #A N\r (  () ! (("@ " (," G@@  Ak!  Ak,  A H@  Ak(  ( ) "  G\r  ((!  6, (0 ) (D" @   6H (L  )   (("@ " (," G@@  Ak!  Ak,  A H@  Ak(  ( ) "  G\r  ((!  6, (0 ) (D" @   6H (L  ) Aà j$ A +     L" A¼%6   §  ("5Aj"."  AO@ @    ü\n       j!@   sAqE@@  AqE@  ! E@  !  !@  -  :   Aj! Aj"AqE\r  I\r  A|q!@ AÀ I\r   A@j"K\r @  ( 6   (6  (6  (6  (6  (6  (6  (6  ( 6   ($6$  ((6(  (,6,  (060  (464  (868  (<6< A@k! A@k" M\r   O\r@  ( 6  Aj! Aj" I\r  AI@  ! AI@  ! Ak!  !@  -  :    - :   - :   - :  Aj! Aj" M\r   I@@  -  :   Aj! Aj" G\r   A x AÄ&A6 AÈ&A 6 PAÈ&AÀ&( 6 AÀ&AÄ&6 AÌ&A	6 AÐ&A 6 AÉ\rAAÜAËAAA A AÂ\rAAÐAØAAA A AÐ&AÀ&( 6 AÀ&AÌ&6 ° AÒv empty or unreadable input truncated short unsigned short root truncated list count truncated int unsigned int et truncated float errors %s:%d: %s vector truncated list header unsigned char /emsdk/emscripten/system/lib/libcxxabi/src/private_typeinfo.cpp /emsdk/emscripten/system/lib/libcxxabi/src/fallback_malloc.cpp terminate_handler unexpectedly threw an exception bool ok bad_array_new_length truncated int array length truncated long array length truncated byte array length truncated string length push unsigned long long truncated long unsigned long std::wstring basic_string std::string std::u16string std::u32string truncated byte unknown list entry type failed reading root name truncated double encode decode unexpected end of compound void ; compound halted terminate_handler unexpectedly returned std::bad_alloc truncated int array data truncated long array data truncated byte array data truncated string data catching a class without an object? emscripten::memory_view<short> emscripten::memory_view<unsigned short> emscripten::memory_view<int> emscripten::memory_view<unsigned int> emscripten::memory_view<float> emscripten::memory_view<uint8_t> emscripten::memory_view<int8_t> emscripten::memory_view<uint16_t> emscripten::memory_view<int16_t> emscripten::memory_view<uint64_t> emscripten::memory_view<int64_t> emscripten::memory_view<uint32_t> emscripten::memory_view<int32_t> emscripten::memory_view<char> emscripten::memory_view<unsigned char> emscripten::memory_view<signed char> emscripten::memory_view<long> emscripten::memory_view<unsigned long> emscripten::memory_view<double> unknown tag type  encode: unsupported tag type      |\n  NSt3__212basic_stringIwNS_11char_traitsIwEENS_9allocatorIwEEEE    Ä\n  NSt3__212basic_stringIDsNS_11char_traitsIDsEENS_9allocatorIDsEEEE       NSt3__212basic_stringIDiNS_11char_traitsIDiEENS_9allocatorIDiEEEE     \\  N10emscripten11memory_viewIcEE      N10emscripten11memory_viewIaEE    ¬  N10emscripten11memory_viewIhEE    Ô  N10emscripten11memory_viewIsEE    ü  N10emscripten11memory_viewItEE    $  N10emscripten11memory_viewIiEE    L  N10emscripten11memory_viewIjEE    t  N10emscripten11memory_viewIlEE      N10emscripten11memory_viewImEE    Ä  N10emscripten11memory_viewIxEE    ì  N10emscripten11memory_viewIyEE    \r  N10emscripten11memory_viewIfEE    <\r  N10emscripten11memory_viewIdEE  h\r  \r  Ô    p\r  N10emscripten3valE    \r  NSt3__212basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEE pppi \r  h\r  ppp È  h\r  h\r  \r  h\r    h\r  L  h\r  p  h\r  p  h\r    h\r  L  h\r    h\r  \r  L  h\r  d  h\r  p  h\r  (  h\r  h\r  ( AàRABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/      h\r  h\r  Ô AÄì\n   d   è  \'    @B   áõ Ê;        00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899¬  Ä    N10__cxxabiv116__shim_type_infoE    ¬  ô  ¸  N10__cxxabiv117__class_type_infoE   ¬  $  ¸  N10__cxxabiv117__pbase_type_infoE   ¬  T    N10__cxxabiv119__pointer_type_infoE       ?   @   A   B   C   ¬     ¸  N10__cxxabiv123__fundamental_type_infoE   Ð  v     Ü  b     è  c     ô  h        a       s       t     $  i     0  j     <  l     H  m     T  x     `  y     l  f     x  d       è  ?   D   A   B   E   F   G   H       Ì  ?   I   A   B   E   J   K   L   ¬  Ø  è  N10__cxxabiv120__si_class_type_infoE        h  7   M   N       @  7   O   P     0  St9exception    ¬  L  h  St20bad_array_new_length    ¬  t  (  St9bad_alloc             Q   R   ¬  ¤  (  St11logic_error     È     S   R   ¬  Ô    St12length_error        ü     T   R   ¬      St12out_of_range      $  St9type_info A´&ð =')}function getBinarySync(file){return file}async function getWasmBinary(binaryFile){return getBinarySync(binaryFile)}async function instantiateArrayBuffer(binaryFile,imports){try{var binary=await getWasmBinary(binaryFile);var instance=await WebAssembly.instantiate(binary,imports);return instance}catch(reason){err(`failed to asynchronously prepare wasm: ${reason}`);abort(reason)}}async function instantiateAsync(binary,binaryFile,imports){return instantiateArrayBuffer(binaryFile,imports)}function getWasmImports(){var imports={a:wasmImports};return imports}async function createWasm(){function receiveInstance(instance){wasmExports=instance.exports;assignWasmExports(wasmExports);updateMemoryViews();return wasmExports}function receiveInstantiationResult(result){return receiveInstance(result["instance"])}var info=getWasmImports();var instantiateWasm=Module["instantiateWasm"];if(instantiateWasm){return new Promise(resolve=>{instantiateWasm(info,inst=>resolve(receiveInstance(inst)))})}wasmBinaryFile??=findWasmBinary();var result=await instantiateAsync(wasmBinary,wasmBinaryFile,info);var exports=receiveInstantiationResult(result);return exports}class ExitStatus{name="ExitStatus";constructor(status){this.message=`Program terminated with exit(${status})`;this.status=status}}var HEAP8;var callRuntimeCallbacks=callbacks=>{while(callbacks.length>0){callbacks.shift()(Module)}};var onPostRuns=[];var onPreRuns=[];var noExitRuntime=true;var stackRestore=val=>__emscripten_stack_restore(val);var stackSave=()=>_emscripten_stack_get_current();var exceptionCaught=[];var uncaughtExceptionCount=0;var ___cxa_begin_catch=ptr=>{var info=new ExceptionInfo(ptr);if(!info.get_caught()){info.set_caught(true);uncaughtExceptionCount--}info.set_rethrown(false);exceptionCaught.push(info);return ___cxa_get_exception_ptr(ptr)};var exceptionLast=null;var HEAPU32;class ExceptionInfo{constructor(excPtr){this.excPtr=excPtr;this.ptr=excPtr-24}set_type(type){HEAPU32[this.ptr+4>>2]=type}get_type(){return HEAPU32[this.ptr+4>>2]}set_destructor(destructor){HEAPU32[this.ptr+8>>2]=destructor}get_destructor(){return HEAPU32[this.ptr+8>>2]}set_caught(caught){caught=caught?1:0;HEAP8[this.ptr+12]=caught}get_caught(){return HEAP8[this.ptr+12]!=0}set_rethrown(rethrown){rethrown=rethrown?1:0;HEAP8[this.ptr+13]=rethrown}get_rethrown(){return HEAP8[this.ptr+13]!=0}init(type,destructor){this.set_adjusted_ptr(0);this.set_type(type);this.set_destructor(destructor)}set_adjusted_ptr(adjustedPtr){HEAPU32[this.ptr+16>>2]=adjustedPtr}get_adjusted_ptr(){return HEAPU32[this.ptr+16>>2]}}var setTempRet0=val=>__emscripten_tempret_set(val);var findMatchingCatch=args=>{var thrown=exceptionLast?.excPtr;if(!thrown){setTempRet0(0);return 0}var info=new ExceptionInfo(thrown);info.set_adjusted_ptr(thrown);var thrownType=info.get_type();if(!thrownType){setTempRet0(0);return thrown}for(var caughtType of args){if(!caughtType||caughtType===thrownType){break}var adjusted_ptr_addr=info.ptr+16;if(___cxa_can_catch(caughtType,thrownType,adjusted_ptr_addr)){setTempRet0(caughtType);return thrown}}setTempRet0(thrownType);return thrown};var ___cxa_find_matching_catch_2=()=>findMatchingCatch([]);var ___cxa_find_matching_catch_3=arg0=>findMatchingCatch([arg0]);var __Unwind_RaiseException=ex=>{throw ex};var ___cxa_throw=(ptr,type,destructor)=>{var info=new ExceptionInfo(ptr);info.init(type,destructor);___cxa_increment_exception_refcount(ptr);ptr=exceptionLast=new CppException(ptr);uncaughtExceptionCount++;__Unwind_RaiseException(ptr)};var __Unwind_Resume=ex=>{throw ex};var ___resumeException=ptr=>{ptr=exceptionLast??=new CppException(ptr);__Unwind_Resume(ptr)};var __abort_js=()=>abort("");var HEAPU8;var AsciiToString=ptr=>{var str="";while(1){var ch=HEAPU8[ptr++];if(!ch)return str;str+=String.fromCharCode(ch)}};var awaitingDependencies={};var registeredTypes={};var typeDependencies={};class BindingError extends Error{constructor(message){super(message);this.name="BindingError"}}var throwBindingError=message=>{throw new BindingError(message)};function sharedRegisterType(rawType,registeredInstance,options={}){var name=registeredInstance.name;if(!rawType){throwBindingError(`type "${name}" must have a positive integer typeid pointer`)}if(registeredTypes.hasOwnProperty(rawType)){if(options.ignoreDuplicateRegistrations){return}else{throwBindingError(`Cannot register type '${name}' twice`)}}registeredTypes[rawType]=registeredInstance;delete typeDependencies[rawType];if(awaitingDependencies.hasOwnProperty(rawType)){var callbacks=awaitingDependencies[rawType];delete awaitingDependencies[rawType];callbacks.forEach(cb=>cb())}}function registerType(rawType,registeredInstance,options={}){return sharedRegisterType(rawType,registeredInstance,options)}var HEAP16;var HEAPU16;var HEAP32;var HEAP64;var HEAPU64;var integerReadValueFromPointer=(name,width,signed)=>{switch(width){case 1:return signed?pointer=>HEAP8[pointer]:pointer=>HEAPU8[pointer];case 2:return signed?pointer=>HEAP16[pointer>>1]:pointer=>HEAPU16[pointer>>1];case 4:return signed?pointer=>HEAP32[pointer>>2]:pointer=>HEAPU32[pointer>>2];case 8:return signed?pointer=>HEAP64[pointer>>3]:pointer=>HEAPU64[pointer>>3];default:throw new TypeError(`invalid integer width (${width}): ${name}`)}};var __embind_register_bigint=(primitiveType,name,size,minRange,maxRange)=>{name=AsciiToString(name);const isUnsignedType=minRange===0n;let fromWireType=value=>value;if(isUnsignedType){const bitSize=size*8;fromWireType=value=>BigInt.asUintN(bitSize,value);maxRange=fromWireType(maxRange)}registerType(primitiveType,{name,fromWireType,toWireType:(destructors,value)=>{if(typeof value=="number"){value=BigInt(value)}return value},readValueFromPointer:integerReadValueFromPointer(name,size,!isUnsignedType),destructorFunction:null})};var __embind_register_bool=(rawType,name,trueValue,falseValue)=>{name=AsciiToString(name);registerType(rawType,{name,fromWireType:function(wt){return!!wt},toWireType:function(destructors,o){return o?trueValue:falseValue},readValueFromPointer:function(pointer){return this.fromWireType(HEAPU8[pointer])},destructorFunction:null})};var emval_freelist=[];var emval_handles=[0,1,,1,null,1,true,1,false,1];var emval_exception_decrefs=[];var __emval_decref=handle=>{if(handle>9&&0===--emval_handles[handle+1]){var value=emval_handles[handle];emval_handles[handle]=undefined;var destructor=emval_exception_decrefs[handle];if(destructor){emval_exception_decrefs[handle]=undefined;destructor(value)}emval_freelist.push(handle)}};var Emval={toValue:handle=>{if(!handle){throwBindingError(`Cannot use deleted val. handle = ${handle}`)}return emval_handles[handle]},toHandle:value=>{switch(value){case undefined:return 2;case null:return 4;case true:return 6;case false:return 8;default:{const handle=emval_freelist.pop()||emval_handles.length;emval_handles[handle]=value;emval_handles[handle+1]=1;return handle}}}};function readPointer(pointer){return this.fromWireType(HEAPU32[pointer>>2])}var EmValType={name:"emscripten::val",fromWireType:handle=>{var rv=Emval.toValue(handle);__emval_decref(handle);return rv},toWireType:(destructors,value)=>Emval.toHandle(value),readValueFromPointer:readPointer,destructorFunction:null};var __embind_register_emval=rawType=>registerType(rawType,EmValType);var HEAPF32;var HEAPF64;var floatReadValueFromPointer=(name,width)=>{switch(width){case 4:return function(pointer){return this.fromWireType(HEAPF32[pointer>>2])};case 8:return function(pointer){return this.fromWireType(HEAPF64[pointer>>3])};default:throw new TypeError(`invalid float width (${width}): ${name}`)}};var __embind_register_float=(rawType,name,size)=>{name=AsciiToString(name);registerType(rawType,{name,fromWireType:value=>value,toWireType:(destructors,value)=>value,readValueFromPointer:floatReadValueFromPointer(name,size),destructorFunction:null})};var createNamedFunction=(name,func)=>Object.defineProperty(func,"name",{value:name});var runDestructors=destructors=>{while(destructors.length){var ptr=destructors.pop();var del=destructors.pop();del(ptr)}};function usesDestructorStack(argTypes){for(var i=1;i<argTypes.length;++i){if(argTypes[i]!==null&&argTypes[i].destructorFunction===undefined){return true}}return false}function createJsInvoker(argTypes,isClassMethodFunc,returns,isAsync){var needsDestructorStack=usesDestructorStack(argTypes);var argCount=argTypes.length-2;var argsList=[];var argsListWired=["fn"];if(isClassMethodFunc){argsListWired.push("thisWired")}for(var i=0;i<argCount;++i){argsList.push(`arg${i}`);argsListWired.push(`arg${i}Wired`)}argsList=argsList.join();argsListWired=argsListWired.join();var invokerFnBody=`return function (${argsList}) {\n`;if(needsDestructorStack){invokerFnBody+="var destructors = [];\n"}var dtorStack=needsDestructorStack?"destructors":"null";var args1=["humanName","throwBindingError","invoker","fn","runDestructors","fromRetWire","toClassParamWire"];if(isClassMethodFunc){invokerFnBody+=`var thisWired = toClassParamWire(${dtorStack}, this);\n`}for(var i=0;i<argCount;++i){var argName=`toArg${i}Wire`;invokerFnBody+=`var arg${i}Wired = ${argName}(${dtorStack}, arg${i});\n`;args1.push(argName)}invokerFnBody+=(returns||isAsync?"var rv = ":"")+`invoker(${argsListWired});\n`;if(needsDestructorStack){invokerFnBody+="runDestructors(destructors);\n"}else{for(var i=isClassMethodFunc?1:2;i<argTypes.length;++i){var paramName=i===1?"thisWired":`arg${i-2}Wired`;if(argTypes[i].destructorFunction!==null){invokerFnBody+=`${paramName}_dtor(${paramName});\n`;args1.push(`${paramName}_dtor`)}}}if(returns){invokerFnBody+="var ret = fromRetWire(rv);\n"+"return ret;\n"}else{}invokerFnBody+="}\n";return new Function(args1,invokerFnBody)}function craftInvokerFunction(humanName,argTypes,classType,cppInvokerFunc,cppTargetFunc,isAsync){var argCount=argTypes.length;if(argCount<2){throwBindingError("argTypes array size mismatch! Must at least get return value and receiver (this) types!")}var isClassMethodFunc=argTypes[1]!==null&&classType!==null;var needsDestructorStack=usesDestructorStack(argTypes);var returns=!argTypes[0].isVoid;var retType=argTypes[0];var instType=argTypes[1];var closureArgs=[humanName,throwBindingError,cppInvokerFunc,cppTargetFunc,runDestructors,retType.fromWireType.bind(retType),instType?.toWireType.bind(instType)];for(var i=2;i<argCount;++i){var argType=argTypes[i];closureArgs.push(argType.toWireType.bind(argType))}if(!needsDestructorStack){for(var i=isClassMethodFunc?1:2;i<argTypes.length;++i){if(argTypes[i].destructorFunction!==null){closureArgs.push(argTypes[i].destructorFunction)}}}let invokerFactory=createJsInvoker(argTypes,isClassMethodFunc,returns,isAsync);var invokerFn=invokerFactory(...closureArgs);return createNamedFunction(humanName,invokerFn)}var ensureOverloadTable=(proto,methodName,humanName)=>{if(undefined===proto[methodName].overloadTable){var prevFunc=proto[methodName];proto[methodName]=function(...args){if(!proto[methodName].overloadTable.hasOwnProperty(args.length)){throwBindingError(`Function '${humanName}' called with an invalid number of arguments (${args.length}) - expects one of (${proto[methodName].overloadTable})!`)}return proto[methodName].overloadTable[args.length].apply(this,args)};proto[methodName].overloadTable=[];proto[methodName].overloadTable[prevFunc.argCount]=prevFunc}};var exposePublicSymbol=(name,value,numArguments)=>{if(Module.hasOwnProperty(name)){if(undefined===numArguments||undefined!==Module[name].overloadTable&&undefined!==Module[name].overloadTable[numArguments]){throwBindingError(`Cannot register public name '${name}' twice`)}ensureOverloadTable(Module,name,name);if(Module[name].overloadTable.hasOwnProperty(numArguments)){throwBindingError(`Cannot register multiple overloads of a function with the same number of arguments (${numArguments})!`)}Module[name].overloadTable[numArguments]=value}else{Module[name]=value;Module[name].argCount=numArguments}};var heap32VectorToArray=(count,firstElement)=>{var array=[];for(var i=0;i<count;i++){array.push(HEAPU32[firstElement+i*4>>2])}return array};class InternalError extends Error{constructor(message){super(message);this.name="InternalError"}}var throwInternalError=message=>{throw new InternalError(message)};var replacePublicSymbol=(name,value,numArguments)=>{if(!Module.hasOwnProperty(name)){throwInternalError("Replacing nonexistent public symbol")}if(undefined!==Module[name].overloadTable&&undefined!==numArguments){Module[name].overloadTable[numArguments]=value}else{Module[name]=value;Module[name].argCount=numArguments}};var wasmTableMirror=[];var getWasmTableEntry=funcPtr=>{var func=wasmTableMirror[funcPtr];if(!func){wasmTableMirror[funcPtr]=func=wasmTable.get(funcPtr)}return func};var embind__requireFunction=(signature,rawFunction,isAsync=false)=>{signature=AsciiToString(signature);function makeDynCaller(){var rtn=getWasmTableEntry(rawFunction);return rtn}var fp=makeDynCaller();if(typeof fp!="function"){throwBindingError(`unknown function pointer with signature ${signature}: ${rawFunction}`)}return fp};class UnboundTypeError extends Error{}var getTypeName=type=>{var ptr=___getTypeName(type);var rv=AsciiToString(ptr);_free(ptr);return rv};var throwUnboundTypeError=(message,types)=>{var unboundTypes=[];var seen={};function visit(type){if(seen[type]){return}if(registeredTypes[type]){return}if(typeDependencies[type]){typeDependencies[type].forEach(visit);return}unboundTypes.push(type);seen[type]=true}types.forEach(visit);throw new UnboundTypeError(`${message}: `+unboundTypes.map(getTypeName).join([", "]))};var whenDependentTypesAreResolved=(myTypes,dependentTypes,getTypeConverters)=>{myTypes.forEach(type=>typeDependencies[type]=dependentTypes);function onComplete(typeConverters){var myTypeConverters=getTypeConverters(typeConverters);if(myTypeConverters.length!==myTypes.length){throwInternalError("Mismatched type converter count")}for(var i=0;i<myTypes.length;++i){registerType(myTypes[i],myTypeConverters[i])}}var typeConverters=new Array(dependentTypes.length);var unregisteredTypes=[];var registered=0;for(let[i,dt]of dependentTypes.entries()){if(registeredTypes.hasOwnProperty(dt)){typeConverters[i]=registeredTypes[dt]}else{unregisteredTypes.push(dt);if(!awaitingDependencies.hasOwnProperty(dt)){awaitingDependencies[dt]=[]}awaitingDependencies[dt].push(()=>{typeConverters[i]=registeredTypes[dt];++registered;if(registered===unregisteredTypes.length){onComplete(typeConverters)}})}}if(0===unregisteredTypes.length){onComplete(typeConverters)}};var getFunctionName=signature=>{signature=signature.trim();const argsIndex=signature.indexOf("(");if(argsIndex===-1)return signature;return signature.slice(0,argsIndex)};var __embind_register_function=(name,argCount,rawArgTypesAddr,signature,rawInvoker,fn,isAsync,isNonnullReturn)=>{var argTypes=heap32VectorToArray(argCount,rawArgTypesAddr);name=AsciiToString(name);name=getFunctionName(name);rawInvoker=embind__requireFunction(signature,rawInvoker,isAsync);exposePublicSymbol(name,function(){throwUnboundTypeError(`Cannot call ${name} due to unbound types`,argTypes)},argCount-1);whenDependentTypesAreResolved([],argTypes,argTypes=>{var invokerArgsArray=[argTypes[0],null].concat(argTypes.slice(1));replacePublicSymbol(name,craftInvokerFunction(name,invokerArgsArray,null,rawInvoker,fn,isAsync),argCount-1);return[]})};var __embind_register_integer=(primitiveType,name,size,minRange,maxRange)=>{name=AsciiToString(name);const isUnsignedType=minRange===0;let fromWireType=value=>value;if(isUnsignedType){var bitshift=32-8*size;fromWireType=value=>value<<bitshift>>>bitshift;maxRange=fromWireType(maxRange)}registerType(primitiveType,{name,fromWireType,toWireType:(destructors,value)=>value,readValueFromPointer:integerReadValueFromPointer(name,size,minRange!==0),destructorFunction:null})};var __embind_register_memory_view=(rawType,dataTypeIndex,name)=>{var typeMapping=[Int8Array,Uint8Array,Int16Array,Uint16Array,Int32Array,Uint32Array,Float32Array,Float64Array,BigInt64Array,BigUint64Array];var TA=typeMapping[dataTypeIndex];function decodeMemoryView(handle){var size=HEAPU32[handle>>2];var data=HEAPU32[handle+4>>2];return new TA(HEAP8.buffer,data,size)}name=AsciiToString(name);registerType(rawType,{name,fromWireType:decodeMemoryView,readValueFromPointer:decodeMemoryView},{ignoreDuplicateRegistrations:true})};var stringToUTF8Array=(str,heap,outIdx,maxBytesToWrite)=>{if(!(maxBytesToWrite>0))return 0;var startIdx=outIdx;var endIdx=outIdx+maxBytesToWrite-1;for(var i=0;i<str.length;++i){var u=str.codePointAt(i);if(u<=127){if(outIdx>=endIdx)break;heap[outIdx++]=u}else if(u<=2047){if(outIdx+1>=endIdx)break;heap[outIdx++]=192|u>>6;heap[outIdx++]=128|u&63}else if(u<=65535){if(outIdx+2>=endIdx)break;heap[outIdx++]=224|u>>12;heap[outIdx++]=128|u>>6&63;heap[outIdx++]=128|u&63}else{if(outIdx+3>=endIdx)break;heap[outIdx++]=240|u>>18;heap[outIdx++]=128|u>>12&63;heap[outIdx++]=128|u>>6&63;heap[outIdx++]=128|u&63;i++}}heap[outIdx]=0;return outIdx-startIdx};var stringToUTF8=(str,outPtr,maxBytesToWrite)=>stringToUTF8Array(str,HEAPU8,outPtr,maxBytesToWrite);var lengthBytesUTF8=str=>{var len=0;for(var i=0;i<str.length;++i){var c=str.charCodeAt(i);if(c<=127){len++}else if(c<=2047){len+=2}else if(c>=55296&&c<=57343){len+=4;++i}else{len+=3}}return len};var UTF8Decoder=globalThis.TextDecoder&&new TextDecoder;var findStringEnd=(heapOrArray,idx,maxBytesToRead,ignoreNul)=>{var maxIdx=idx+maxBytesToRead;if(ignoreNul)return maxIdx;while(heapOrArray[idx]&&!(idx>=maxIdx))++idx;return idx};var UTF8ArrayToString=(heapOrArray,idx=0,maxBytesToRead,ignoreNul)=>{var endPtr=findStringEnd(heapOrArray,idx,maxBytesToRead,ignoreNul);if(endPtr-idx>16&&heapOrArray.buffer&&UTF8Decoder){return UTF8Decoder.decode(heapOrArray.subarray(idx,endPtr))}var str="";while(idx<endPtr){var u0=heapOrArray[idx++];if(!(u0&128)){str+=String.fromCharCode(u0);continue}var u1=heapOrArray[idx++]&63;if((u0&224)==192){str+=String.fromCharCode((u0&31)<<6|u1);continue}var u2=heapOrArray[idx++]&63;if((u0&240)==224){u0=(u0&15)<<12|u1<<6|u2}else{u0=(u0&7)<<18|u1<<12|u2<<6|heapOrArray[idx++]&63}if(u0<65536){str+=String.fromCharCode(u0)}else{var ch=u0-65536;str+=String.fromCharCode(55296|ch>>10,56320|ch&1023)}}return str};var UTF8ToString=(ptr,maxBytesToRead,ignoreNul)=>ptr?UTF8ArrayToString(HEAPU8,ptr,maxBytesToRead,ignoreNul):"";var __embind_register_std_string=(rawType,name)=>{name=AsciiToString(name);var stdStringIsUTF8=true;registerType(rawType,{name,fromWireType(value){var length=HEAPU32[value>>2];var payload=value+4;var str;if(stdStringIsUTF8){str=UTF8ToString(payload,length,true)}else{str="";for(var i=0;i<length;++i){str+=String.fromCharCode(HEAPU8[payload+i])}}_free(value);return str},toWireType(destructors,value){if(value instanceof ArrayBuffer){value=new Uint8Array(value)}var length;var valueIsOfTypeString=typeof value=="string";if(!(valueIsOfTypeString||ArrayBuffer.isView(value)&&value.BYTES_PER_ELEMENT==1)){throwBindingError("Cannot pass non-string to std::string")}if(stdStringIsUTF8&&valueIsOfTypeString){length=lengthBytesUTF8(value)}else{length=value.length}var base=_malloc(4+length+1);var ptr=base+4;HEAPU32[base>>2]=length;if(valueIsOfTypeString){if(stdStringIsUTF8){stringToUTF8(value,ptr,length+1)}else{for(var i=0;i<length;++i){var charCode=value.charCodeAt(i);if(charCode>255){_free(base);throwBindingError("String has UTF-16 code units that do not fit in 8 bits")}HEAPU8[ptr+i]=charCode}}}else{HEAPU8.set(value,ptr)}if(destructors!==null){destructors.push(_free,base)}return base},readValueFromPointer:readPointer,destructorFunction(ptr){_free(ptr)}})};var UTF16Decoder=globalThis.TextDecoder?new TextDecoder("utf-16le"):undefined;var UTF16ToString=(ptr,maxBytesToRead,ignoreNul)=>{var idx=ptr>>1;var endIdx=findStringEnd(HEAPU16,idx,maxBytesToRead/2,ignoreNul);if(endIdx-idx>16&&UTF16Decoder)return UTF16Decoder.decode(HEAPU16.subarray(idx,endIdx));var str="";for(var i=idx;i<endIdx;++i){var codeUnit=HEAPU16[i];str+=String.fromCharCode(codeUnit)}return str};var stringToUTF16=(str,outPtr,maxBytesToWrite=2147483647)=>{if(maxBytesToWrite<2)return 0;maxBytesToWrite-=2;var startPtr=outPtr;var numCharsToWrite=maxBytesToWrite<str.length*2?maxBytesToWrite/2:str.length;for(var i=0;i<numCharsToWrite;++i){var codeUnit=str.charCodeAt(i);HEAP16[outPtr>>1]=codeUnit;outPtr+=2}HEAP16[outPtr>>1]=0;return outPtr-startPtr};var lengthBytesUTF16=str=>str.length*2;var UTF32ToString=(ptr,maxBytesToRead,ignoreNul)=>{var str="";var startIdx=ptr>>2;for(var i=0;!(i>=maxBytesToRead/4);i++){var utf32=HEAPU32[startIdx+i];if(!utf32&&!ignoreNul)break;str+=String.fromCodePoint(utf32)}return str};var stringToUTF32=(str,outPtr,maxBytesToWrite=2147483647)=>{if(maxBytesToWrite<4)return 0;var startPtr=outPtr;var endPtr=startPtr+maxBytesToWrite-4;for(var i=0;i<str.length;++i){var codePoint=str.codePointAt(i);if(codePoint>65535){i++}HEAP32[outPtr>>2]=codePoint;outPtr+=4;if(outPtr+4>endPtr)break}HEAP32[outPtr>>2]=0;return outPtr-startPtr};var lengthBytesUTF32=str=>{var len=0;for(var i=0;i<str.length;++i){var codePoint=str.codePointAt(i);if(codePoint>65535){i++}len+=4}return len};var __embind_register_std_wstring=(rawType,charSize,name)=>{name=AsciiToString(name);var decodeString,encodeString,lengthBytesUTF;if(charSize===2){decodeString=UTF16ToString;encodeString=stringToUTF16;lengthBytesUTF=lengthBytesUTF16}else{decodeString=UTF32ToString;encodeString=stringToUTF32;lengthBytesUTF=lengthBytesUTF32}registerType(rawType,{name,fromWireType:value=>{var length=HEAPU32[value>>2];var str=decodeString(value+4,length*charSize,true);_free(value);return str},toWireType:(destructors,value)=>{if(!(typeof value=="string")){throwBindingError(`Cannot pass non-string to C++ string type ${name}`)}var length=lengthBytesUTF(value);var ptr=_malloc(4+length+charSize);HEAPU32[ptr>>2]=length/charSize;encodeString(value,ptr+4,length+charSize);if(destructors!==null){destructors.push(_free,ptr)}return ptr},readValueFromPointer:readPointer,destructorFunction(ptr){_free(ptr)}})};var __embind_register_void=(rawType,name)=>{name=AsciiToString(name);registerType(rawType,{isVoid:true,name,fromWireType:()=>undefined,toWireType:(destructors,o)=>undefined})};var emval_methodCallers=[];var emval_addMethodCaller=caller=>{var id=emval_methodCallers.length;emval_methodCallers.push(caller);return id};var requireRegisteredType=(rawType,humanName)=>{var impl=registeredTypes[rawType];if(undefined===impl){throwBindingError(`${humanName} has unknown type ${getTypeName(rawType)}`)}return impl};var emval_lookupTypes=(argCount,argTypes)=>{var a=new Array(argCount);for(var i=0;i<argCount;++i){a[i]=requireRegisteredType(HEAPU32[argTypes+i*4>>2],`parameter ${i}`)}return a};var emval_returnValue=(toReturnWire,destructorsRef,handle)=>{var destructors=[];var result=toReturnWire(destructors,handle);if(destructors.length){HEAPU32[destructorsRef>>2]=Emval.toHandle(destructors)}return result};var emval_symbols={};var getStringOrSymbol=address=>{var symbol=emval_symbols[address];if(symbol===undefined){return AsciiToString(address)}return symbol};var __emval_create_invoker=(argCount,argTypesPtr,kind)=>{var GenericWireTypeSize=8;var[retType,...argTypes]=emval_lookupTypes(argCount,argTypesPtr);var toReturnWire=retType.toWireType.bind(retType);var argFromPtr=argTypes.map(type=>type.readValueFromPointer.bind(type));argCount--;var captures={toValue:Emval.toValue};var args=argFromPtr.map((argFromPtr,i)=>{var captureName=`argFromPtr${i}`;captures[captureName]=argFromPtr;return`${captureName}(args${i?"+"+i*GenericWireTypeSize:""})`});var functionBody;switch(kind){case 0:functionBody="toValue(handle)";break;case 2:functionBody="new (toValue(handle))";break;case 3:functionBody="";break;case 1:captures["getStringOrSymbol"]=getStringOrSymbol;functionBody="toValue(handle)[getStringOrSymbol(methodName)]";break}functionBody+=`(${args})`;if(!retType.isVoid){captures["toReturnWire"]=toReturnWire;captures["emval_returnValue"]=emval_returnValue;functionBody=`return emval_returnValue(toReturnWire, destructorsRef, ${functionBody})`}functionBody=`return function (handle, methodName, destructorsRef, args) {\n${functionBody}\n}`;var invokerFunction=new Function(Object.keys(captures),functionBody)(...Object.values(captures));var functionName=`methodCaller<(${argTypes.map(t=>t.name)}) => ${retType.name}>`;return emval_addMethodCaller(createNamedFunction(functionName,invokerFunction))};var __emval_get_property=(handle,key)=>{handle=Emval.toValue(handle);key=Emval.toValue(key);return Emval.toHandle(handle[key])};var __emval_incref=handle=>{if(handle>9){emval_handles[handle+1]+=1}};var __emval_invoke=(caller,handle,methodName,destructorsRef,args)=>emval_methodCallers[caller](handle,methodName,destructorsRef,args);var __emval_invoke_i64=(a1,a2,a3,a4,a5)=>__emval_invoke(a1,a2,a3,a4,a5);var __emval_new_array=()=>Emval.toHandle([]);var __emval_new_cstring=v=>Emval.toHandle(getStringOrSymbol(v));var __emval_new_object=()=>Emval.toHandle({});var __emval_run_destructors=handle=>{var destructors=Emval.toValue(handle);runDestructors(destructors);__emval_decref(handle)};var __emval_set_property=(handle,key,value)=>{handle=Emval.toValue(handle);key=Emval.toValue(key);value=Emval.toValue(value);handle[key]=value};var getHeapMax=()=>2147483648;var alignMemory=(size,alignment)=>Math.ceil(size/alignment)*alignment;var growMemory=size=>{var oldHeapSize=wasmMemory.buffer.byteLength;var pages=(size-oldHeapSize+65535)/65536|0;try{wasmMemory.grow(pages);updateMemoryViews();return 1}catch(e){}};var _emscripten_resize_heap=requestedSize=>{var oldSize=HEAPU8.length;requestedSize>>>=0;var maxHeapSize=getHeapMax();if(requestedSize>maxHeapSize){return false}for(var cutDown=1;cutDown<=4;cutDown*=2){var overGrownHeapSize=oldSize*(1+.2/cutDown);overGrownHeapSize=Math.min(overGrownHeapSize,requestedSize+100663296);var newSize=Math.min(maxHeapSize,alignMemory(Math.max(requestedSize,overGrownHeapSize),65536));var replacement=growMemory(newSize);if(replacement){return true}}return false};{if(Module["noExitRuntime"])noExitRuntime=Module["noExitRuntime"];if(Module["print"])out=Module["print"];if(Module["printErr"])err=Module["printErr"];if(Module["arguments"])programArgs=Module["arguments"];if(Module["thisProgram"])thisProgram=Module["thisProgram"];var preInit=Module["preInit"];if(preInit){if(typeof preInit=="function")Module["preInit"]=preInit=[preInit];while(preInit.length>0){preInit.shift()()}}}var ___getTypeName,_malloc,_free,_setThrew,__emscripten_tempret_set,__emscripten_stack_restore,_emscripten_stack_get_current,___cxa_increment_exception_refcount,___cxa_can_catch,___cxa_get_exception_ptr,memory,__indirect_function_table,wasmMemory,wasmTable;function assignWasmExports(wasmExports){___getTypeName=wasmExports["R"];_malloc=wasmExports["S"];_free=wasmExports["U"];_setThrew=wasmExports["V"];__emscripten_tempret_set=wasmExports["W"];__emscripten_stack_restore=wasmExports["X"];_emscripten_stack_get_current=wasmExports["Y"];___cxa_increment_exception_refcount=wasmExports["Z"];___cxa_can_catch=wasmExports["_"];___cxa_get_exception_ptr=wasmExports["$"];memory=wasmMemory=wasmExports["P"];__indirect_function_table=wasmTable=wasmExports["T"]}var wasmImports={w:___cxa_begin_catch,a:___cxa_find_matching_catch_2,h:___cxa_find_matching_catch_3,r:___cxa_throw,i:___resumeException,D:__abort_js,C:__embind_register_bigint,M:__embind_register_bool,K:__embind_register_emval,B:__embind_register_float,t:__embind_register_function,o:__embind_register_integer,j:__embind_register_memory_view,L:__embind_register_std_string,v:__embind_register_std_wstring,N:__embind_register_void,n:__emval_create_invoker,E:__emval_decref,I:__emval_get_property,s:__emval_incref,m:__emval_invoke,H:__emval_invoke_i64,z:__emval_new_array,k:__emval_new_cstring,A:__emval_new_object,O:__emval_run_destructors,J:__emval_set_property,F:_emscripten_resize_heap,l:invoke_diiiii,G:invoke_fiii,p:invoke_i,f:invoke_ii,g:invoke_iii,c:invoke_iiii,y:invoke_jiiiii,x:invoke_v,b:invoke_vi,d:invoke_vii,e:invoke_viii,q:invoke_viiii,u:invoke_viiiii};function invoke_viii(index,a1,a2,a3){var sp=stackSave();try{getWasmTableEntry(index)(a1,a2,a3)}catch(e){stackRestore(sp);if(!(e instanceof EmscriptenEH))throw e;_setThrew(1,0)}}function invoke_vi(index,a1){var sp=stackSave();try{getWasmTableEntry(index)(a1)}catch(e){stackRestore(sp);if(!(e instanceof EmscriptenEH))throw e;_setThrew(1,0)}}function invoke_iii(index,a1,a2){var sp=stackSave();try{return getWasmTableEntry(index)(a1,a2)}catch(e){stackRestore(sp);if(!(e instanceof EmscriptenEH))throw e;_setThrew(1,0)}}function invoke_vii(index,a1,a2){var sp=stackSave();try{getWasmTableEntry(index)(a1,a2)}catch(e){stackRestore(sp);if(!(e instanceof EmscriptenEH))throw e;_setThrew(1,0)}}function invoke_ii(index,a1){var sp=stackSave();try{return getWasmTableEntry(index)(a1)}catch(e){stackRestore(sp);if(!(e instanceof EmscriptenEH))throw e;_setThrew(1,0)}}function invoke_i(index){var sp=stackSave();try{return getWasmTableEntry(index)()}catch(e){stackRestore(sp);if(!(e instanceof EmscriptenEH))throw e;_setThrew(1,0)}}function invoke_iiii(index,a1,a2,a3){var sp=stackSave();try{return getWasmTableEntry(index)(a1,a2,a3)}catch(e){stackRestore(sp);if(!(e instanceof EmscriptenEH))throw e;_setThrew(1,0)}}function invoke_diiiii(index,a1,a2,a3,a4,a5){var sp=stackSave();try{return getWasmTableEntry(index)(a1,a2,a3,a4,a5)}catch(e){stackRestore(sp);if(!(e instanceof EmscriptenEH))throw e;_setThrew(1,0)}}function invoke_viiiii(index,a1,a2,a3,a4,a5){var sp=stackSave();try{getWasmTableEntry(index)(a1,a2,a3,a4,a5)}catch(e){stackRestore(sp);if(!(e instanceof EmscriptenEH))throw e;_setThrew(1,0)}}function invoke_viiii(index,a1,a2,a3,a4){var sp=stackSave();try{getWasmTableEntry(index)(a1,a2,a3,a4)}catch(e){stackRestore(sp);if(!(e instanceof EmscriptenEH))throw e;_setThrew(1,0)}}function invoke_jiiiii(index,a1,a2,a3,a4,a5){var sp=stackSave();try{return getWasmTableEntry(index)(a1,a2,a3,a4,a5)}catch(e){stackRestore(sp);if(!(e instanceof EmscriptenEH))throw e;_setThrew(1,0);return 0n}}function invoke_fiii(index,a1,a2,a3){var sp=stackSave();try{return getWasmTableEntry(index)(a1,a2,a3)}catch(e){stackRestore(sp);if(!(e instanceof EmscriptenEH))throw e;_setThrew(1,0)}}function invoke_v(index){var sp=stackSave();try{getWasmTableEntry(index)()}catch(e){stackRestore(sp);if(!(e instanceof EmscriptenEH))throw e;_setThrew(1,0)}}async function run(){preRun();var setStatus=Module["setStatus"];if(setStatus){setStatus("Running...");await new Promise(resolve=>setTimeout(resolve,1));setTimeout(setStatus,1,"")}if(ABORT)return;initRuntime();Module["onRuntimeInitialized"]?.();postRun()}var wasmExports;wasmExports=await createWasm();await run();
+;return Module}})();if(typeof exports==="object"&&typeof module==="object"){module.exports=createNBTModule;module.exports.default=createNBTModule}else if(typeof define==="function"&&define["amd"])define([],()=>createNBTModule);
+
+</script>
+  <script>
+/* ===== src/model.js ===== */
+/* ─────────────────────────────────────────────────────────────────────────────
+ * model.js — in-browser NBT model.
+ *
+ * A tag is a plain object:
+ *   { t: tagType, n: name|null, v: value, et?: entryType }
+ *   Compound  → v: [ [key, childTag], ... ]   (order preserved)
+ *   List      → et: entry type, v: [ childTag, ... ]
+ *   ByteArray → v: base64 string
+ *   IntArray  → v: number[]
+ *   LongArray → v: bigint[]
+ *   Long      → v: bigint
+ *   others    → v: number | string
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+window.NBT = (function (ns) {
+  'use strict';
+
+  const T = {
+    End: 0, Byte: 1, Short: 2, Int: 3, Long: 4, Float: 5, Double: 6,
+    ByteArray: 7, String: 8, List: 9, Compound: 10, IntArray: 11, LongArray: 12,
+  };
+
+  const TYPE_NAMES = {
+    0: 'End', 1: 'Byte', 2: 'Short', 3: 'Int', 4: 'Long', 5: 'Float', 6: 'Double',
+    7: 'ByteArray', 8: 'String', 9: 'List', 10: 'Compound', 11: 'IntArray', 12: 'LongArray',
+  };
+
+  function typeName(t) { return TYPE_NAMES[t] || ('Tag#' + t); }
+
+  const ARRAY_TYPES = { 7: true, 11: true, 12: true };
+  const NUMERIC = { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true };
+
+  function isCompound(tag) { return tag && tag.t === T.Compound; }
+  function isList(tag) { return tag && tag.t === T.List; }
+  function isContainer(tag) { return isCompound(tag) || isList(tag); }
+
+  // Fresh, empty tag of a type.
+  function createTag(type, name) {
+    const t = { t: type, n: name || '' };
+    switch (type) {
+      case T.Byte: case T.Short: case T.Int: t.v = 0; break;
+      case T.Long: t.v = 0n; break;
+      case T.Float: case T.Double: t.v = 0; break;
+      case T.String: t.v = ''; break;
+      case T.ByteArray: t.v = ''; break;         // empty base64
+      case T.IntArray: t.v = []; break;
+      case T.LongArray: t.v = []; break;
+      case T.List: t.et = T.End; t.v = []; break;
+      case T.Compound: t.v = []; break;
+      default: t.v = null; break;
+    }
+    return t;
+  }
+
+  // Deep clone; bigint-safe (structuredClone rejects BigInt in some engines).
+  function clone(v) {
+    if (v === null || typeof v !== 'object') return v;
+    if (Array.isArray(v)) return v.map(clone);
+    const o = {};
+    for (const k in v) o[k] = clone(v[k]);
+    return o;
+  }
+
+  // Walk every tag (pre-order). cb(tag, pathChain).
+  function walk(tag, cb, chain) {
+    chain = chain || [];
+    cb(tag, chain);
+    if (isCompound(tag)) {
+      for (const [k, child] of tag.v) { chain.push(k); walk(child, cb, chain); chain.pop(); }
+    } else if (isList(tag)) {
+      for (let i = 0; i < tag.v.length; i++) { chain.push(i); walk(tag.v[i], cb, chain); chain.pop(); }
+    }
+  }
+
+  function countTags(tag) { let n = 0; walk(tag, () => n++); return n; }
+
+  function byteSizeOfModel(tag) {
+    // approximate: 1..12 per boundary + payload
+    // precise size needs encoding; cheap heuristic used for status line only.
+    let n = 0;
+    walk(tag, (t) => {
+      n += 4;
+      if (typeof t.n === 'string') n += 2 + t.n.length;
+      switch (t.t) {
+        case T.Byte: n += 1; break;
+        case T.Short: n += 2; break;
+        case T.Int: case T.Float: n += 4; break;
+        case T.Long: case T.Double: n += 8; break;
+        case T.String: n += 2 + t.v.length; break;
+        default: break;
+      }
+    });
+    return n;
+  }
+
+  // ── container helpers ───────────────────────────────────────────────────────
+
+  // Path: array of keys/indices from root tag to the target (exclusive of root).
+  function getByPath(root, path) {
+    let cur = root;
+    for (const seg of path) {
+      if (isCompound(cur)) cur = cur.v.find(([k]) => k === seg)?.[1];
+      else if (isList(cur)) cur = cur.v[seg];
+      if (!cur) return null;
+    }
+    return cur;
+  }
+
+  // Locate a tag inside the model by object reference; returns { parent, key?, index? }
+  function locate(root, target) {
+    if (root === target) return { parent: null, key: null, index: null };
+    if (isCompound(root)) {
+      for (let i = 0; i < root.v.length; i++) {
+        const [k, child] = root.v[i];
+        if (child === target) return { parent: root, key: k, index: i };
+        const r = locate(child, target);
+        if (r.parent) return r;
+      }
+    } else if (isList(root)) {
+      for (let i = 0; i < root.v.length; i++) {
+        if (root.v[i] === target) return { parent: root, key: null, index: i };
+        const r = locate(root.v[i], target);
+        if (r.parent) return r;
+      }
+    }
+    return { parent: null, key: null, index: null };
+  }
+
+  // list of {key: string, tag} — the tree layer renders from this path
+  function childEntries(tag) {
+    if (isCompound(tag)) return tag.v.map(([k, child]) => ({ key: k, tag: child }));
+    if (isList(tag)) return tag.v.map((child, i) => ({ key: String(i), tag: child }));
+    return [];
+  }
+
+  ns.T = T;
+  ns.typeName = typeName;
+  ns.isCompound = isCompound;
+  ns.isList = isList;
+  ns.isContainer = isContainer;
+  ns.createTag = createTag;
+  ns.clone = clone;
+  ns.walk = walk;
+  ns.countTags = countTags;
+  ns.byteSize = byteSizeOfModel;
+  ns.getByPath = getByPath;
+  ns.locate = locate;
+  ns.childEntries = childEntries;
+
+  return ns;
+})(window.NBT || {});
+
+/* ===== src/codec.js ===== */
+/* ─────────────────────────────────────────────────────────────────────────────
+ * codec.js — wasm glue + compression + load/save pipeline.
+ *
+ * Compression is handled with the platform CompressionStream/DecompressionStream
+ * (gzip / zlib "deflate" / raw "deflate-raw"), the wasm layer is a pure NBT codec.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+window.NBT = (function (ns) {
+  'use strict';
+
+  const MODES = {
+    gzip: { label: 'gzip', stream: 'gzip' },
+    zlib: { label: 'zlib', stream: 'deflate' },
+    raw: { label: 'raw deflate', stream: 'deflate-raw' },
+    none: { label: 'uncompressed', stream: null },
+  };
+
+  let _ready;
+  let _module = null;
+
+  function ready() {
+    if (_ready) return _ready;
+    _ready = new Promise((resolve, reject) => {
+      const start = performance.now();
+      const loader = () => {
+        if (typeof createNBTModule !== 'function') {
+          if (performance.now() - start > 15000) { reject(new Error('NBT codec failed to load')); return; }
+          setTimeout(loader, 20);
+          return;
+        }
+        createNBTModule().then((m) => { _module = m; ns.codec._module = m; resolve(m); }).catch(reject);
+      };
+      loader();
+    });
+    return _ready;
+  }
+
+  // ── base64 helpers ─────────────────────────────────────────────────────────
+
+  function bytesToB64(bytes) {
+    let bin = '';
+    const len = bytes.length;
+    for (let i = 0; i < len; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+
+  function b64ToBytes(b64) {
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  // ── compression (async) ─────────────────────────────────────────────────────
+
+  async function readAll(stream) {
+    const reader = stream.getReader();
+    const chunks = [];
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    const size = chunks.reduce((a, c) => a + c.length, 0);
+    const out = new Uint8Array(size);
+    let o = 0;
+    for (const c of chunks) { out.set(c, o); o += c.length; }
+    return out;
+  }
+
+  async function decompressKind(bytes, kind) {
+    if (!kind) return bytes;
+    const ds = new DecompressionStream(kind);
+    return readAll(new Blob([bytes]).stream().pipeThrough(ds));
+  }
+
+  function hasGzipMagic(b) { return b.length > 2 && b[0] === 0x1f && b[1] === 0x8b; }
+
+  // Return { modeKey } for a raw buffer, cheaply.
+  function sniffMode(bytes) {
+    if (hasGzipMagic(bytes)) return 'gzip';
+    if (bytes.length > 2 && bytes[0] === 0x78) return 'zlib';       // common zlib headers
+    return 'unknown';                                                // raw or uncompressed
+  }
+
+  // Try decompress candidates for a file buffer, returning the best
+  // { data, mode } — the mode whose decode is cleanest.
+  async function loadBuffer(rawBytes) {
+    const wasm = await ready();
+    const candidates = [];
+
+    if (hasGzipMagic(rawBytes)) candidates.push({ mode: 'gzip', kind: 'gzip' });
+    candidates.push({ mode: 'zlib', kind: 'deflate' });
+    candidates.push({ mode: 'raw', kind: 'deflate-raw' });
+    // uncompressed always last and never fails to "decompress"
+
+    async function tryDecode(data) {
+      try {
+        const res = wasm.decode(bytesToB64(data), true);
+        return res;
+      } catch (e) {
+        return { ok: false, errors: [String(e && e.message || e)], root: null };
+      }
+    }
+
+    let best = null;
+    for (const c of candidates) {
+      let data;
+      try {
+        data = c.kind ? await decompressKind(rawBytes, c.kind) : rawBytes;
+      } catch (err) {
+        continue; // this candidate doesn't inflate
+      }
+      const res = await tryDecode(data);
+      if (res.ok && res.root) {
+        const score = { mode: c.mode, data, res, errCount: (res.errors || []).length, decoded: true };
+        if (score.errCount === 0) return score;
+        if (!best || score.errCount < best.errCount) best = score;
+      }
+    }
+
+    if (best) return best;
+
+    // try uncompressed anyway if nothing inflated
+    const res = await tryDecode(rawBytes);
+    if (res.ok && res.root) {
+      return { mode: 'none', data: rawBytes, res, errCount: (res.errors || []).length, decoded: true };
+    }
+    return { mode: null, data: null, res: null, errCount: Infinity, decoded: false };
+  }
+
+  // Compile a model to the requested compression mode → Uint8Array.
+  async function compileModel(model, mode) {
+    const wasm = await ready();
+    const b64 = wasm.encode(model);            // may throw on malformed model
+    const raw = b64ToBytes(b64);
+    const kind = MODES[mode] ? MODES[mode].stream : null;
+    if (!kind) return raw;
+    const cs = new CompressionStream(kind);
+    return readAll(new Blob([raw]).stream().pipeThrough(cs));
+  }
+
+  function download(bytes, filename, mime) {
+    const blob = new Blob([bytes], { type: mime || 'application/octet-stream' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename || 'out.dat';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 400);
+  }
+
+  ns.codec = {
+    ready, loadBuffer, compileModel, download,
+    bytesToB64, b64ToBytes, sniffMode, MODES,
+    decompressKind, hasGzipMagic,
+  };
+
+  return ns;
+})(window.NBT || {});
+
+/* ===== src/format.js ===== */
+/* ─────────────────────────────────────────────────────────────────────────────
+ * format.js — SNBT (de)serialization + typed-JSON converter.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+window.NBT = (function (ns) {
+  'use strict';
+  const { T, typeName } = ns;
+
+  function quote(s) {
+    return '"' + s
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\t/g, '\\t')
+      .replace(/\x08/g, '\\b')
+      .replace(/\x0c/g, '\\f') + '"';
+  }
+
+  function safeKey(k) {
+    return /^[a-zA-Z_][a-zA-Z0-9._+-]*$/.test(k) ? k : quote(k);
+  }
+
+  function numStr(v, isFloat) {
+    if (Number.isNaN(v)) return 'NaN';
+    if (v === Infinity) return 'Infinity';
+    if (v === -Infinity) return '-Infinity';
+    if (isFloat) {
+      if (Number.isInteger(v) && Math.abs(v) < 1e15) return v.toFixed(1);
+      return String(v);
+    }
+    return String(v);
+  }
+
+  function toSNBT(tag, opts) {
+    opts = opts || {};
+    const indent = opts.indent ? 2 : 0;
+    let depth = 0;
+    const nl = indent ? '\n' : '';
+    const pad = () => ' '.repeat(indent * depth);
+    const padIn = () => ' '.repeat(indent * (depth + 1));
+
+    function stringify(tag) {
+      const v = tag.v;
+      switch (tag.t) {
+        case T.Byte: return numStr(v, false) + 'b';
+        case T.Short: return numStr(v, false) + 's';
+        case T.Int: return numStr(v, false);
+        case T.Long: return String(v) + 'L';
+        case T.Float: return numStr(v, true) + 'f';
+        case T.Double: return numStr(v, true) + 'd';
+        case T.String: return quote(v);
+        case T.ByteArray: return '[B; ' + ns.codec.b64ToBytes(v).join(', ') + ']';
+        case T.IntArray: return '[I; ' + v.join(', ') + ']';
+        case T.LongArray: return '[L; ' + v.map((x) => String(x)).join(', ') + ']';
+        case T.List: {
+          if (v.length === 0) return '[]';
+          depth++;
+          const out = v.map((c) => padIn() + stringify(c));
+          depth--;
+          return '[' + nl + out.join(',' + nl) + nl + pad() + ']';
+        }
+        case T.Compound: {
+          if (v.length === 0) return '{}';
+          depth++;
+          const out = v.map(([k, c]) => padIn() + safeKey(k) + ': ' + stringify(c));
+          depth--;
+          return '{' + nl + out.join(',' + nl) + nl + pad() + '}';
+        }
+        default: return '<' + typeName(tag.t) + '>';
+      }
+    }
+    return stringify(tag);
+  }
+
+  function parseSNBT(text) {
+    let pos = 0;
+    const src = text;
+
+    function error(msg) { throw new Error('SNBT parse error at ' + pos + ': ' + msg); }
+    function skipWS() { while (pos < src.length && /\s/.test(src[pos])) pos++; }
+    function peek() { return pos < src.length ? src[pos] : ''; }
+    function expect(ch) { skipWS(); if (src[pos] !== ch) error("expected '" + ch + "', got '" + peek() + "'"); pos++; }
+    function readIdent() {
+      let s = '';
+      while (pos < src.length && /[A-Za-z0-9._+\-]/.test(src[pos])) s += src[pos++];
+      return s;
+    }
+    function readString() {
+      skipWS();
+      const q = src[pos];
+      if (q === '"' || q === "'") {
+        pos++;
+        let s = '';
+        while (pos < src.length) {
+          const c = src[pos++];
+          if (c === q) break;
+          if (c === '\\') {
+            const e = src[pos++];
+            if (e === 'n') s += '\n'; else if (e === 'r') s += '\r'; else if (e === 't') s += '\t';
+            else if (e === 'b') s += '\b'; else if (e === 'f') s += '\f';
+            else if (e === "\\") s += '\\'; else if (e === '"') s += '"';
+            else if (e === "'") s += "'"; else s += e;
+          } else s += c;
+        }
+        return s;
+      }
+      const id = readIdent();
+      if (id === '') error('expected string');
+      return id;
+    }
+    function readNumberToken() {
+      skipWS();
+      let s = '';
+      if (peek() === '-' || peek() === '+') s += src[pos++];
+      let hasDot = false, hasExp = false;
+      while (pos < src.length) {
+        const c = src[pos];
+        if (/[0-9]/.test(c)) { s += c; pos++; }
+        else if (c === '.' && !hasDot && !hasExp) { hasDot = true; s += c; pos++; }
+        else if ((c === 'e' || c === 'E') && !hasExp) { hasExp = true; s += c; pos++; if (peek() === '-' || peek() === '+') s += src[pos++]; }
+        else break;
+      }
+      return { s, hasDot };
+    }
+    function parseElement() {
+      skipWS();
+      const c = peek();
+      if (c === '{') return parseCompound();
+      if (c === '[') return parseListOrArray();
+      if (c === '"' || c === "'") {
+        const tag = ns.createTag(T.String);
+        tag.v = readString();
+        return tag;
+      }
+      // number or ident / true/false
+      const head = readNumberToken();
+      if (head.hasDot || head.s === '' || /^[+-]?\./.test(head.s)) {
+        // could be ident like EOF? no
+      }
+      const rest = readIdent();
+      skipWS();
+      // larger-than-int number?
+      const token = head.s + rest;
+      let suffix = 'i';
+      const m = token.match(/([bBsSlLfFdD]|\b)$/);
+      if (rest) suffix = rest[rest.length - 1].toLowerCase();
+
+      const numStr2 = token.replace(/[bBsSlLfFdD]$/, '');
+      if (token === 'true') { const t = ns.createTag(T.Byte); t.v = 1; return t; }
+      if (token === 'false') { const t = ns.createTag(T.Byte); t.v = 0; return t; }
+      if (token === 'NaN' || token === 'Infinity' || token === '-Infinity') {
+        const num = token === 'NaN' ? NaN : token === 'Infinity' ? Infinity : -Infinity;
+        if (suffix === 'f') { const t = ns.createTag(T.Float); t.v = num; return t; }
+        const t = ns.createTag(T.Double); t.v = num; return t;
+      }
+
+      if (head.hasDot || suffix === 'f' || suffix === 'd') {
+        const t = ns.createTag(suffix === 'f' ? T.Float : T.Double);
+        t.v = parseFloat(numStr2);
+        return t;
+      }
+      switch (suffix) {
+        case 'b': { const t = ns.createTag(T.Byte); t.v = parseInt(numStr2, 10); return t; }
+        case 's': { const t = ns.createTag(T.Short); t.v = parseInt(numStr2, 10); return t; }
+        case 'l': { const t = ns.createTag(T.Long); t.v = BigInt(numStr2.trim()); return t; }
+        default: {
+          if (/^\d{10,}$/.test(numStr2.trim())) { const t = ns.createTag(T.Long); t.v = BigInt(numStr2.trim()); return t; }
+          const t = ns.createTag(T.Int); t.v = parseInt(numStr2, 10); return t;
+        }
+      }
+    }
+    function parseCompound() {
+      expect('{');
+      const tag = ns.createTag(T.Compound);
+      skipWS();
+      if (peek() === '}') { pos++; return tag; }
+      while (true) {
+        skipWS();
+        const key = readString();
+        expect(':');
+        const child = parseElement();
+        child.n = key;
+        tag.v.push([key, child]);
+        skipWS();
+        const cc = peek();
+        if (cc === ',') { pos++; continue; }
+        if (cc === '}') { pos++; break; }
+        error("expected ',' or '}'");
+      }
+      return tag;
+    }
+    function parseListOrArray() {
+      expect('[');
+      skipWS();
+      if (peek() === 'B' && src[pos + 1] === ';') { pos += 2; skipWS(); const arr = readArrInts('b'); return arr; }
+      if (peek() === 'I' && src[pos + 1] === ';') { pos += 2; skipWS(); return readArrInts('i'); }
+      if (peek() === 'L' && src[pos + 1] === ';') { pos += 2; skipWS(); return readArrLongs(); }
+
+      const tag = ns.createTag(T.List);
+      tag.et = T.End;
+      skipWS();
+      if (peek() === ']') { pos++; return tag; }
+      while (true) {
+        const child = parseElement();
+        tag.v.push(child);
+        tag.et = child.t;
+        skipWS();
+        const cc = peek();
+        if (cc === ',') { pos++; continue; }
+        if (cc === ']') { pos++; break; }
+        error("expected ',' or ']'");
+      }
+      return tag;
+
+      function readArrInts(kind) {
+        const tag = ns.createTag(kind === 'b' ? T.ByteArray : T.IntArray);
+        const out = [];
+        skipWS();
+        if (peek() === ']') { pos++; return tag; }
+        while (true) {
+          const t = parseElement();
+          out.push(t.v);
+          skipWS();
+          const cc = peek();
+          if (cc === ',') { pos++; continue; }
+          if (cc === ']') { pos++; break; }
+          error("expected ',' or ']'");
+        }
+        if (kind === 'b') tag.v = ns.codec.bytesToB64(new Uint8Array(out));
+        else tag.v = out;
+        return tag;
+      }
+      function readArrLongs() {
+        const tag = ns.createTag(T.LongArray);
+        const out = [];
+        skipWS();
+        if (peek() === ']') { pos++; return tag; }
+        while (true) {
+          const t = parseElement();
+          out.push(typeof t.v === 'bigint' ? t.v : BigInt(t.v));
+          skipWS();
+          const cc = peek();
+          if (cc === ',') { pos++; continue; }
+          if (cc === ']') { pos++; break; }
+          error("expected ',' or ']'");
+        }
+        tag.v = out;
+        return tag;
+      }
+    }
+
+    skipWS();
+    const tag = parseElement();
+    skipWS();
+    if (pos < src.length) error('unexpected trailing content');
+    return tag;
+  }
+
+  // ── typed JSON ──────────────────────────────────────────────────────────────
+
+  function toJSON(tag, name) {
+    function ser(t, isRoot) {
+      const o = { type: typeName(t.t) };
+      if (isRoot && t.n) o.name = t.n;
+      switch (t.t) {
+        case T.Compound: {
+          const val = {};
+          for (const [k, c] of t.v) val[k] = ser(c, false);
+          o.value = val;
+          break;
+        }
+        case T.List: o.value = t.v.map((c) => ser(c, false)); break;
+        case T.ByteArray: o.value = t.v; o.length = ns.codec.b64ToBytes(t.v).length; break;
+        case T.IntArray: o.value = t.v; o.length = t.v.length; break;
+        case T.LongArray: o.value = t.v.map((x) => String(x)); o.length = t.v.length; break;
+        case T.Long: o.value = String(t.v); break;
+        case T.String: o.value = t.v; break;
+        case T.Byte: case T.Short: case T.Int: case T.Float: case T.Double: o.value = t.v; break;
+        default: o.value = null; break;
+      }
+      return o;
+    }
+    return ser(tag, true);
+  }
+
+  function fromJSON(obj) {
+    const toNum = (v) => (typeof v === 'number' ? v : parseFloat(v));
+    function parse(o) {
+      let tag;
+      switch (o.type) {
+        case 'Compound': tag = ns.createTag(T.Compound);
+          for (const k in o.value) { const c = parse(o.value[k]); c.n = k; tag.v.push([k, c]); }
+          break;
+        case 'List': {
+          tag = ns.createTag(T.List);
+          tag.et = T.End;
+          for (const c of o.value) { const cc = parse(c); tag.v.push(cc); tag.et = cc.t; }
+          break;
+        }
+        case 'ByteArray': tag = ns.createTag(T.ByteArray); tag.v = o.value || ''; break;
+        case 'IntArray': tag = ns.createTag(T.IntArray); tag.v = (o.value || []).map(toNum); break;
+        case 'LongArray': tag = ns.createTag(T.LongArray); tag.v = (o.value || []).map((x) => BigInt(typeof x === 'bigint' ? x : String(x))); break;
+        case 'Byte': tag = ns.createTag(T.Byte); tag.v = toNum(o.value); break;
+        case 'Short': tag = ns.createTag(T.Short); tag.v = toNum(o.value); break;
+        case 'Int': tag = ns.createTag(T.Int); tag.v = toNum(o.value); break;
+        case 'Long': tag = ns.createTag(T.Long); tag.v = BigInt(typeof o.value === 'bigint' ? o.value : (Number.isFinite(o.value) ? String(o.value) : o.value)); break;
+        case 'Float': tag = ns.createTag(T.Float); tag.v = toNum(o.value); break;
+        case 'Double': tag = ns.createTag(T.Double); tag.v = toNum(o.value); break;
+        case 'String': tag = ns.createTag(T.String); tag.v = String(o.value); break;
+        default: throw new Error('unknown JSON type: ' + o.type);
+      }
+      if (o.name) tag.n = o.name;
+      return tag;
+    }
+    const tag = parse(obj);
+    return tag;
+  }
+
+  ns.toSNBT = toSNBT;
+  ns.parseSNBT = parseSNBT;
+  ns.toJSON = toJSON;
+  ns.fromJSON = fromJSON;
+
+  return ns;
+})(window.NBT || {});
+
+/* ===== src/region.js ===== */
+/* ─────────────────────────────────────────────────────────────────────────────
+ * region.js — Minecraft region files (.mca / .mcr).
+ *
+ * 8 KiB header:   1024 location entries [3-byte sector offset + 1-byte size]
+ *                 1024 timestamp  entries (u32)
+ * Each chunk:     [u32 length][u8 compression][payload]
+ *   compression:   0/1 → gzip, 2 → zlib, 3 → uncompressed
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+window.NBT = (function (ns) {
+  'use strict';
+  const { T } = ns;
+
+  function u32be(dv, o) { return dv.getUint32(o, false); }
+  function setU32be(dv, o, v) { dv.setUint32(o, v, false); }
+
+  function createRegion(bytes) {
+    const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const chunks = new Map();   // "x,z" → { x, z, time, sectorOff, sectorCount, raw }
+    const models = new Map();   // "x,z" → { model, compression } for edited chunks
+    const original = bytes;
+
+    for (let i = 0; i < 1024; i++) {
+      const loc = u32be(header, i * 4);
+      const x = i % 32, z = Math.floor(i / 32);
+      const sectorOff = loc >> 8;
+      const sectorCount = loc & 0xff;
+      if (sectorOff === 0 || sectorCount === 0) continue;
+      chunks.set(x + ',' + z, {
+        x, z,
+        time: u32be(header, 4096 + i * 4),
+        sectorOff, sectorCount,
+      });
+    }
+
+    function sliceChunk(c) {
+      const start = c.sectorOff * 4096;
+      const end = start + c.sectorCount * 4096;
+      if (start >= original.length) return null;
+      const data = original.subarray(start, Math.min(end, original.length));
+      if (data.length < 5) return null;
+      const length = ((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]) >>> 0;
+      const compression = data[4];
+      const payload = data.subarray(5, Math.min(5 + length, data.length));
+      return { compression, payload, raw: data };
+    }
+
+    // Read a chunk as an editable NBT model (cached).
+    async function chunkModel(x, z) {
+      const key = x + ',' + z;
+      if (models.has(key)) return models.get(key).model;
+      const c = chunks.get(key);
+      if (!c) return null;
+      const sliced = sliceChunk(c);
+      if (!sliced) return null;
+
+      let payload = sliced.payload;
+      switch (sliced.compression) {
+        case 2: payload = await ns.codec.decompressKind(payload, 'deflate'); break;     // zlib
+        case 3: break;                                                                   // uncompressed
+        default:
+          try { payload = await ns.codec.decompressKind(payload, 'gzip'); }
+          catch (e) { return null; }
+          if (!ns.codec.hasGzipMagic(sliced.payload)) {
+            try { payload = await ns.codec.decompressKind(sliced.payload, 'deflate-raw'); } catch (e) { /* keep */ }
+          }
+          break;
+      }
+      const b64 = ns.codec.bytesToB64(payload);
+      const wasm = await ns.codec.ready();
+      const res = wasm.decode(b64, true);
+      if (!res.ok && !res.root) return null;
+      return res.root;
+    }
+
+    function chunkModelSync(x, z) {
+      const key = x + ',' + z;
+      if (models.has(key)) return models.get(key).model;
+      const c = chunks.get(key);
+      if (!c) return null;
+      const sliced = sliceChunk(c);
+      if (!sliced) return null;
+      // uncompressed marker not yet (async); simplest: only cache-aware
+      return null;
+    }
+
+    function isDirty(x, z) { return models.has(x + ',' + z); }
+    function setChunkModel(x, z, model, compression) {
+      models.set(x + ',' + z, { model, compression: compression || 2 });
+    }
+    function removeChunk(x, z) {
+      chunks.delete(x + ',' + z);
+      models.delete(x + ',' + z);
+    }
+    function listChunks() {
+      return Array.from(chunks.values()).map((c) => ({ x: c.x, z: c.z, time: c.time }));
+    }
+
+    async function pack() {
+      // gather entries: edited → re-encode; pristine → reuse original bytes
+      const entries = [];
+      for (const c of chunks.values()) {
+        const key = c.x + ',' + c.z;
+        let data;
+        let compression = 2;
+        if (models.has(key)) {
+          const { model, compression: comp } = models.get(key);
+          const raw = await ns.codec.compileModel(model, comp === 3 ? 'none' : (comp === 1 ? 'gzip' : 'zlib'));
+          compression = comp;
+          if (raw.length === 0) continue;
+          data = raw;
+        } else {
+          const sliced = sliceChunk(c);
+          if (!sliced) continue;
+          data = sliced.payload;
+          compression = sliced.compression;
+        }
+        entries.push({ x: c.x, z: c.z, time: models.has(key) ? Date.now() / 1000 | 0 : c.time, data, compression });
+      }
+
+      const totalSectors = entries.reduce((a, e) => a + Math.max(1, Math.ceil((e.data.length + 5) / 4096)), 0);
+      const out = new Uint8Array(8192 + totalSectors * 4096);
+      const dv = new DataView(out.buffer);
+      let cursor = 8192;
+      for (const e of entries) {
+        const sectorCount = Math.max(1, Math.ceil((e.data.length + 5) / 4096));
+        const idx = e.x + e.z * 32;
+        setU32be(dv, idx * 4, ((cursor / 4096) << 8) | sectorCount);
+        setU32be(dv, 4096 + idx * 4, e.time >>> 0);
+        const len = e.data.length + 1;
+        out[cursor] = (len >>> 24) & 0xff;
+        out[cursor + 1] = (len >>> 16) & 0xff;
+        out[cursor + 2] = (len >>> 8) & 0xff;
+        out[cursor + 3] = len & 0xff;
+        out[cursor + 4] = e.compression;
+        out.set(e.data, cursor + 5);
+        cursor += sectorCount * 4096;
+      }
+      return out;
+    }
+
+    return {
+      kind: 'region',
+      listChunks, chunkModel, chunkModelSync, isDirty, setChunkModel, removeChunk, pack,
+    };
+  }
+
+  // Cheap probe: file is a multiple of 4096, ≥ 8 KiB, and first location is sane.
+  function probeRegion(bytes) {
+    if (bytes.length < 8192 || bytes.length % 4096 !== 0) return false;
+    const dv = new DataView(bytes.buffer, 0, Math.min(bytes.byteLength, 8192));
+    let found = 0;
+    for (let i = 0; i < 1024 && found < 3; i++) {
+      const loc = u32be(dv, i * 4);
+      const off = (loc >>> 8) * 4096;
+      const count = loc & 0xff;
+      if (off > 0 && count > 0 && off + count * 4096 <= bytes.length) found++;
+      else if (loc !== 0) return false;
+    }
+    return found > 0;
+  }
+
+  ns.region = { create: createRegion, probe: probeRegion };
+
+  return ns;
+})(window.NBT || {});
+
+/* ===== src/mcdata.js ===== */
+/* ─────────────────────────────────────────────────────────────────────────────
+ * mcdata.js — Minecraft data hints + smart structure recognition.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+window.NBT = (function (ns) {
+  'use strict';
+  const { T, isCompound, isList } = ns;
+
+  // Legacy (pre-1.13) numeric block ids 0..95.
+  const BLOCKS = [
+    'air', 'stone', 'grass', 'dirt', 'cobblestone', 'oak_planks', 'sapling', 'bedrock',
+    'flowing_water', 'water', 'flowing_lava', 'lava', 'sand', 'gravel', 'gold_ore', 'iron_ore',
+    'coal_ore', 'oak_log', 'oak_leaves', 'sponge', 'glass', 'lapis_ore', 'lapis_block', 'dispenser',
+    'sandstone', 'note_block', 'bed', 'golden_rail', 'detector_rail', 'sticky_piston', 'web', 'tallgrass',
+    'deadbush', 'piston', 'piston_head', 'wool', 'piston_extension', 'yellow_flower', 'red_flower', 'brown_mushroom',
+    'red_mushroom', 'gold_block', 'iron_block', 'double_stone_slab', 'stone_slab', 'brick_block', 'tnt', 'bookshelf',
+    'mossy_cobblestone', 'obsidian', 'torch', 'fire', 'mob_spawner', 'oak_stairs', 'chest', 'redstone_wire',
+    'diamond_ore', 'diamond_block', 'crafting_table', 'wheat', 'farmland', 'furnace', 'lit_furnace', 'standing_sign',
+    'wooden_door', 'ladder', 'rail', 'stone_stairs', 'wall_sign', 'lever', 'stone_pressure_plate', 'iron_door',
+    'wooden_pressure_plate', 'redstone_ore', 'lit_redstone_ore', 'redstone_torch', 'lit_redstone_torch', 'stone_button', 'snow_layer', 'ice',
+    'snow', 'cactus', 'clay', 'reeds', 'jukebox', 'fence', 'pumpkin', 'netherrack',
+    'soul_sand', 'glowstone', 'portal', 'lit_pumpkin', 'cake', 'unpowered_repeater', 'powered_repeater', 'stained_glass',
+  ];
+
+  function blockName(legacyId, damage) {
+    const base = BLOCKS[legacyId];
+    if (!base) return 'block:' + legacyId;
+    if (damage && (legacyId === 5 || legacyId === 17 || legacyId === 35)) return base + ':meta' + damage;
+    return base;
+  }
+
+  function itemName(idStr) {
+    if (typeof idStr !== 'string') return String(idStr);
+    const short = idStr.indexOf(':') >= 0 ? idStr.split(':').slice(1).join(':') : idStr;
+    return short.replace(/_/g, ' ');
+  }
+
+  // ── tag access helpers ──────────────────────────────────────────────────────
+
+  function get(tag, key) {
+    if (!isCompound(tag)) return undefined;
+    const hit = tag.v.find(([k]) => k === key);
+    return hit ? hit[1] : undefined;
+  }
+
+  function getVal(tag, key) { const c = get(tag, key); return c ? c.v : undefined; }
+
+  function asInt(v) { return typeof v === 'bigint' ? Number(v) : Number(v); }
+
+  // ── recognizers ─────────────────────────────────────────────────────────────
+
+  function looksLikeItemStack(tag) {
+    if (!isCompound(tag)) return false;
+    const keys = tag.v.map(([k]) => k);
+    return (keys.includes('id') && keys.includes('Count')) ||
+      (keys.includes('id') && keys.includes('Damage'));
+  }
+
+  function looksLikeBlockEntity(tag) {
+    if (!isCompound(tag)) return false;
+    const keys = tag.v.map(([k]) => k);
+    const id = getVal(tag, 'id');
+    return typeof id === 'string' && keys.includes('x') && keys.includes('y') && keys.includes('z');
+  }
+
+  function looksLikeInventoryTag(tag) {
+    if (!isList(tag) || tag.v.length === 0) return false;
+    return tag.v.every(looksLikeItemStack);
+  }
+
+  // ── item stack card ─────────────────────────────────────────────────────────
+
+  function itemStackInfo(tag) {
+    const id = getVal(tag, 'id');
+    let displayName = itemName(id);
+    let icon = 'item';
+    if (typeof id === 'string' && id.indexOf(':') > 0) {
+      const ns2 = id.split(':'); if (ns2[0] === 'minecraft') icon = 'minecraft-item';
+    }
+    const count = getVal(tag, 'Count');
+    const damage = getVal(tag, 'Damage');
+    const slots = getVal(tag, 'Slot');
+    const customName = (() => {
+      const inner = get(getVal(tag, 'tag'), 'display');
+      return inner ? getVal(inner, 'Name') : undefined;
+    })();
+    return {
+      icon,
+      id: String(id),
+      displayName: customName || displayName,
+      count,
+      damage,
+      slot: slots !== undefined ? asInt(slots) : null,
+    };
+  }
+
+  // ── smart card builder ──────────────────────────────────────────────────────
+
+  // Returns a render descriptor or null. chain = path keys/indices from root.
+  function smartFor(tag, chain) {
+    const lastKey = chain.length ? chain[chain.length - 1] : null;
+
+    if (looksLikeBlockEntity(tag)) {
+      const kv = {
+        'id': getVal(tag, 'id'),
+        'x': getVal(tag, 'x'), 'y': getVal(tag, 'y'), 'z': getVal(tag, 'z'),
+        'CustomName': getVal(tag, 'CustomName'),
+      };
+      const items = get(tag, 'Items');
+      const inventory = isList(items) ? items.v.map(itemStackInfo) : [];
+      return { kind: 'blockEntity', title: 'Block entity', kv, inventory, tag };
+    }
+
+    if (looksLikeItemStack(tag)) {
+      return { kind: 'itemStack', title: 'Item stack', item: itemStackInfo(tag), tag };
+    }
+
+    if (looksLikeInventoryTag(tag) && (lastKey === 'Items' || lastKey === 'Inventory')) {
+      return { kind: 'inventory', title: 'Inventory (' + tag.v.length + ')', items: tag.v.map(itemStackInfo), tag };
+    }
+
+    // Structure save/load "Data" compound
+    if (lastKey === 'Data' && isCompound(tag) && get(tag, 'size')) {
+      const size = getVal(tag, 'size');
+      const palette = get(tag, 'palette');
+      const blocks = get(tag, 'blocks');
+      const entities = get(tag, 'entities');
+      return {
+        kind: 'structureData', title: 'Structure data',
+        kv: {
+          size: Array.isArray(size) ? size.join(' × ') : String(size),
+          palette: isList(palette) ? palette.v.length : 0,
+          blocks: isList(blocks) ? blocks.v.length : 0,
+          entities: isList(entities) ? entities.v.length : 0,
+          author: getVal(tag, 'author'),
+        },
+        tag,
+      };
+    }
+
+    return null;
+  }
+
+  ns.mcdata = { blockName, itemName, smartFor, itemStackInfo, looksLikeBlockEntity };
+
+  return ns;
+})(window.NBT || {});
+
+/* ===== src/treeview.js ===== */
+/* ─────────────────────────────────────────────────────────────────────────────
+ * treeview.js — lightweight custom NBT tree widget (no library).
+ * Renders from JS model; paths are arrays of keys/indices from the root.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+window.NBT = (function (ns) {
+  'use strict';
+  const { T, isCompound, isList, childEntries } = ns;
+
+  const SEP = '\u001f';
+  function pkey(path) { return path.join(SEP); }
+  function pathFromKey(k) { return k === '' ? [] : k.split(SEP); }
+
+  const ICON_ATTR = {
+    1: { c: '#7cb7e5', g: 'b1' }, 2: { c: '#7cb7e5', g: 'b2' }, 3: { c: '#7cb7e5', g: 'b4' },
+    4: { c: '#7cb7e5', g: 'b8' }, 5: { c: '#8fd1a8', g: 'f4' }, 6: { c: '#8fd1a8', g: 'f8' },
+    7: { c: '#d4a7d5', g: '[B]' }, 8: { c: '#c3d38c', g: '""' }, 9: { c: '#f0c674', g: '≡' },
+    10: { c: '#f09a73', g: '{}' }, 11: { c: '#d4a7d5', g: '[I]' }, 12: { c: '#d4a7d5', g: '[L]' },
+  };
+
+  function iconSvg(t) {
+    const a = ICON_ATTR[t];
+    if (!a) return '<span class="icon" style="color:var(--text-faint)">?</span>';
+    return '<span class="icon" style="color:' + a.c + ';font-family:ui-monospace,monospace">' + a.g + '</span>';
+  }
+
+  function valueText(tag) {
+    switch (tag.t) {
+      case T.Compound: return '';
+      case T.List: return '[' + tag.v.length + ']';
+      case T.ByteArray: case T.IntArray: case T.LongArray: return '[' + tag.v.length + ']';
+      case T.String: {
+        const disp = tag.v.length > 40 ? tag.v.slice(0, 40) + '…' : tag.v;
+        return '"' + disp.replace(/\n/g, '␤') + '"';
+      }
+      case T.Long: return String(tag.v) + 'L';
+      case T.Byte: return String(tag.v) + 'b';
+      case T.Short: return String(tag.v) + 's';
+      case T.Float: return String(tag.v) + 'f';
+      case T.Double: return String(tag.v) + 'd';
+      default: return String(tag.v);
+    }
+  }
+
+  function Tree(opts) {
+    this.root = opts.root;
+    this.opts = opts;
+    this.onSelect = opts.onSelect;
+    this.onCommit = opts.onCommit;
+    this.onMove = opts.onMove;
+    this.onContextMenu = opts.onContextMenu;
+    this.movable = opts.movable !== false;
+
+    this.openPaths = new Set(opts.openPaths || ['']);
+    this.selectedPath = null;
+    this.query = '';
+    this.searchResults = [];
+    this.searchIdx = 0;
+
+    this.el = opts.el;
+    this.bindGlobal();
+  }
+
+  Tree.prototype.bindGlobal = function () {
+    const self = this;
+    this.el.addEventListener('click', (e) => {
+      const caret = e.target.closest('.caret');
+      if (caret) {
+        const li = e.target.closest('li');
+        const path = pathFromKey(li.dataset.path);
+        const key = pkey(path);
+        if (this.openPaths.has(key)) this.openPaths.delete(key);
+        else this.openPaths.add(key);
+        this.refresh();
+        e.stopPropagation();
+        return;
+      }
+      const node = e.target.closest('li');
+      if (node) {
+        const path = pathFromKey(node.dataset.path);
+        this.select(path, true);
+        e.stopPropagation();
+      }
+    });
+
+    this.el.addEventListener('dblclick', (e) => {
+      const li = e.target.closest('li');
+      if (!li) return;
+      const path = pathFromKey(li.dataset.path);
+      const tag = this.getAt(path);
+      if (tag && !isContainer(tag)) this.beginValueEdit(path, tag);
+      else if (tag) this.select(path, true);
+    });
+
+    this.el.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const li = e.target.closest('li');
+      if (li) {
+        const path = pathFromKey(li.dataset.path);
+        this.select(path, false);
+        if (this.onContextMenu) this.onContextMenu(path, e.clientX, e.clientY);
+      } else if (this.onContextMenu) {
+        this.onContextMenu([], e.clientX, e.clientY);
+      }
+    });
+  };
+
+  function isContainer(t) { return isCompound(t) || isList(t); }
+
+  Tree.prototype.select = function (path, notify) {
+    this.selectedPath = pkey(path);
+    this.syncSelection();
+    if (path.length) this.openPaths.add(pkey(path.slice(0, -1)));
+    if (notify && this.onSelect) this.onSelect(path);
+  };
+
+  Tree.prototype.syncSelection = function () {
+    this.el.querySelectorAll('li.selected').forEach((li) => li.classList.remove('selected'));
+    if (this.selectedPath) {
+      const li = this.el.querySelector('li[data-path="' + CSS.escape(this.selectedPath) + '"]');
+      if (li) li.classList.add('selected');
+    }
+  };
+
+  Tree.prototype.getAt = function (path) {
+    return ns.getByPath(this.root, path);
+  };
+
+  Tree.prototype.matches = function (tag, path, q) {
+    if (!q) return false;
+    const key = String(path.length ? path[path.length - 1] : (tag.n || ''));
+    const text = (key + ' ' + ns.typeName(tag.t) + ' ' + valueText(tag)).toLowerCase();
+    return text.indexOf(q) !== -1;
+  };
+
+  Tree.prototype.applySearch = function (q) {
+    this.query = q ? q.toLowerCase() : '';
+    if (!this.query) {
+      this.searchResults = [];
+      this.searchIdx = 0;
+    } else {
+      this.searchResults = [];
+      const collect = (tag, path) => {
+        if (this.matches(tag, path, this.query)) this.searchResults.push(path.concat());
+        if (isCompound(tag)) for (const [k, c] of tag.v) { path.push(k); collect(c, path); path.pop(); }
+        else if (isList(tag)) for (let i = 0; i < tag.v.length; i++) { path.push(i); collect(tag.v[i], path); path.pop(); }
+      };
+      collect(this.root, []);
+      this.searchIdx = 0;
+      if (this.searchResults.length === 0) this.openPaths = new Set(['']);
+      else {
+        for (const p of this.searchResults) {
+          for (let i = 0; i <= p.length; i++) this.openPaths.add(pkey(p.slice(0, i)));
+        }
+      }
+    }
+    this.refresh();
+    this.focusSearch(this.searchIdx);
+  };
+
+  Tree.prototype.focusSearch = function (idx) {
+    if (this.searchResults.length === 0) return;
+    idx = ((idx % this.searchResults.length) + this.searchResults.length) % this.searchResults.length;
+    this.searchIdx = idx;
+    const p = this.searchResults[idx];
+    this.select(p, true);
+    const li = this.el.querySelector('li[data-path="' + CSS.escape(pkey(p)) + '"]');
+    if (li) li.scrollIntoView({ block: 'nearest' });
+  };
+
+  Tree.prototype.beginNameEdit = function (path, tag) {
+    const li = this.el.querySelector('li[data-path="' + CSS.escape(pkey(path)) + '"]');
+    const nameSpan = li && li.querySelector('.entry-name');
+    if (!nameSpan) return;
+
+    const input = document.createElement('input');
+    input.className = 'name-input';
+    input.value = path.length ? String(path[path.length - 1]) : (tag.n || '');
+    nameSpan.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const self = this;
+    const commit = () => {
+      const newName = input.value;
+      if (self.opts.onRename) self.opts.onRename(tag, path, newName);
+      self.refresh();
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') commit();
+      else if (e.key === 'Escape') self.refresh();
+      e.stopPropagation();
+    });
+    input.addEventListener('blur', commit);
+    input.addEventListener('click', (e) => e.stopPropagation());
+  };
+
+  Tree.prototype.beginValueEdit = function (path, tag) {
+    const li = this.el.querySelector('li[data-path="' + CSS.escape(pkey(path)) + '"]');
+    const chip = li && li.querySelector('.entry-val');
+    if (!chip) return;
+
+    const input = document.createElement('input');
+    input.className = 'name-input';
+    input.style.width = Math.min(260, Math.max(90, chip.textContent.length * 7)) + 'px';
+    input.value = this.inputValueFor(tag);
+    chip.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const self = this;
+    const commit = () => {
+      const parsed = self.parseInput(tag, input.value);
+      if (parsed !== undefined && parsed !== tag.v) {
+        tag.v = parsed;
+        if (self.onCommit) self.onCommit(tag);
+      }
+      self.refresh();
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') commit();
+      else if (e.key === 'Escape') self.refresh();
+      e.stopPropagation();
+    });
+    input.addEventListener('blur', commit);
+    input.addEventListener('click', (e) => e.stopPropagation());
+  };
+
+  Tree.prototype.inputValueFor = function (tag) {
+    switch (tag.t) {
+      case T.Float: case T.Double: case T.Byte: case T.Short: case T.Int: return String(tag.v);
+      case T.Long: return String(tag.v);
+      case T.String: return tag.v;
+      default: return '';
+    }
+  };
+
+  Tree.prototype.parseInput = function (tag, raw) {
+    switch (tag.t) {
+      case T.Byte: { const n = parseInt(raw, 10); return isNaN(n) ? undefined : (n & 0xff) << 24 >> 24; }
+      case T.Short: { const n = parseInt(raw, 10); return isNaN(n) ? undefined : (n & 0xffff) << 16 >> 16; }
+      case T.Int: { const n = parseInt(raw, 10); return isNaN(n) ? undefined : n | 0; }
+      case T.Long: { const t = raw.trim(); if (!/^[+-]?\d+$/.test(t)) return undefined; try { return BigInt(t); } catch (e) { return undefined; } }
+      case T.Float: { const n = parseFloat(raw); return isNaN(n) ? undefined : n; }
+      case T.Double: { const n = parseFloat(raw); return isNaN(n) ? undefined : n; }
+      case T.String: return raw;
+      default: return undefined;
+    }
+  };
+
+  // ── rendering ───────────────────────────────────────────────────────────────
+
+  Tree.prototype.refresh = function () {
+    this.el.textContent = '';
+    this.el.appendChild(this.buildNode(this.root, [], true));
+    this.syncSelection();
+  };
+
+  Tree.prototype.buildNode = function (tag, path, isRoot) {
+    const li = document.createElement('li');
+    li.dataset.path = pkey(path);
+    if (this.selectedPath === pkey(path)) li.classList.add('selected');
+    if (this.matches(tag, path, this.query)) li.classList.add('match');
+    li.draggable = this.movable && !isRoot;
+
+    const node = document.createElement('div');
+    node.className = 'node';
+
+    const container = isContainer(tag);
+    const open = this.openPaths.has(pkey(path));
+
+    const caret = document.createElement('span');
+    caret.className = 'caret' + (open ? ' open' : '') + (container ? '' : ' leaf');
+    caret.textContent = container ? '▶' : ' ';
+    node.appendChild(caret);
+
+    node.insertAdjacentHTML('beforeend', iconSvg(tag.t));
+
+    const name = document.createElement('span');
+    name.className = 'entry-name';
+    if (isRoot) {
+      name.textContent = tag.n || '(unnamed)';
+      if (!tag.n) name.classList.add('unnamed');
+    } else {
+      name.textContent = String(path[path.length - 1]);
+    }
+    node.appendChild(name);
+
+    if (!container) {
+      const val = document.createElement('span');
+      val.className = 'entry-val ' + (tag.t === T.String ? 'str' : 'mono');
+      val.textContent = valueText(tag);
+      node.appendChild(val);
+    } else {
+      const cntEl = document.createElement('span');
+      cntEl.className = 'badge';
+      cntEl.textContent = (isCompound(tag) ? tag.v.length + ' tags' : tag.v.length + ' items');
+      node.appendChild(cntEl);
+    }
+
+    li.appendChild(node);
+
+    if (container && open) {
+      const ul = document.createElement('ul');
+      ul.className = 'tree';
+      const entries = childEntries(tag);
+      for (const entry of entries) {
+        ul.appendChild(this.buildNode(entry.tag, path.concat([entry.key]), false));
+      }
+      if (entries.length === 0) {
+        const empty = document.createElement('li');
+        empty.className = 'leaf-empty';
+        empty.textContent = 'empty';
+        ul.appendChild(empty);
+      }
+      li.appendChild(ul);
+    }
+
+    this.attachDrag(li, node, path, container);
+    return li;
+  };
+
+  Tree.prototype.attachDrag = function (li, node, path, container) {
+    const self = this;
+    li.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', pkey(path));
+      e.dataTransfer.effectAllowed = 'move';
+      self._dragPath = path;
+    });
+    li.addEventListener('dragover', (e) => {
+      if (!self._dragPath) return;
+      const fp = pkey(self._dragPath);
+      const dp = pkey(path);
+      if (dp === fp || dp.startsWith(fp + SEP)) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'none';
+        return;
+      }
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = node.getBoundingClientRect();
+      const h = rect.height;
+      const r = h / 3;
+      li.classList.remove('drop-top', 'drop-mid', 'drop-bottom');
+      if (e.clientY < rect.top + r) li.classList.add('drop-top');
+      else if (e.clientY > rect.bottom - r) li.classList.add('drop-bottom');
+      else if (container) li.classList.add('drop-mid');
+      else li.classList.add(e.clientY < rect.top + h / 2 ? 'drop-top' : 'drop-bottom');
+    });
+    li.addEventListener('dragleave', () => {
+      li.classList.remove('drop-top', 'drop-mid', 'drop-bottom');
+    });
+    li.addEventListener('drop', (e) => {
+      e.preventDefault();
+      li.classList.remove('drop-top', 'drop-mid', 'drop-bottom');
+      const fromPath = self._dragPath;
+      self._dragPath = null;
+      if (!fromPath) return;
+      const dest = path;
+      const zone = (() => {
+        const rect = node.getBoundingClientRect();
+        const r = rect.height / 3;
+        if (e.clientY < rect.top + r) return 'top';
+        if (e.clientY > rect.bottom - r) return container ? 'mid' : 'bottom';
+        return container ? 'mid' : (e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom');
+      })();
+      if (self.onMove) self.onMove({
+        fromPath, destPath: dest, zone,
+        destIsContainer: container,
+      });
+    });
+  };
+
+  ns.Tree = Tree;
+  ns.valueText = valueText;
+  ns.iconSvg = iconSvg;
+
+  return ns;
+})(window.NBT || {});
+
+/* ===== src/inspector.js ===== */
+/* ─────────────────────────────────────────────────────────────────────────────
+ * inspector.js — side panel: edit values, arrays, smart structure cards.
+ * Mutations go through api.commit(tag) so the app can push history + refresh.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+window.NBT = (function (ns) {
+  'use strict';
+  const { T, typeName, isCompound, isList } = ns;
+
+  const IA_TYPES = [T.ByteArray, T.IntArray, T.LongArray];
+
+  function Inspector(api) {
+    this.api = api;
+    this.el = api.el;
+    this.cur = null; // { tag, path }
+  }
+
+  function el(tagName, cls, text) {
+    const n = document.createElement(tagName);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function field(label) {
+    const f = el('div', 'field');
+    f.appendChild(el('label', null, label));
+    return f;
+  }
+
+  Inspector.prototype.render = function (tag, path) {
+    this.cur = { tag, path };
+    const box = this.el;
+    box.textContent = '';
+
+    const api = this.api;
+
+    // header
+    const h = el('div', 'insp');
+    const h2 = el('h2');
+    h2.appendChild(el('span', 'type-chip', typeName(tag.t)));
+    h2.appendChild(el('span', null, tag.n || nameFromPath(path)));
+    // rename button for any tag
+    if (!(path.length === 0)) {
+      const rn = el('button', null, '✎ rename');
+      rn.onclick = () => api.renameTag(path);
+      h2.appendChild(rn);
+    }
+    h.appendChild(h2);
+    const p = el('div', 'path', pathToStr(path));
+    h.appendChild(p);
+
+    // smart card
+    if (api.smartEnabled && !path.length === false) {
+      const smart = ns.mcdata.smartFor(tag, path);
+      if (smart) h.appendChild(this.renderSmart(smart));
+    }
+
+    // value editors
+    switch (tag.t) {
+      case T.Byte: case T.Short: case T.Int: case T.Long: case T.Float: case T.Double:
+        h.appendChild(this.renderNumber(tag));
+        break;
+      case T.String:
+        h.appendChild(this.renderString(tag));
+        break;
+      case T.IntArray: case T.LongArray:
+        h.appendChild(this.renderArray(tag));
+        break;
+      case T.ByteArray:
+        h.appendChild(this.renderByteArray(tag));
+        break;
+      case T.List:
+        h.appendChild(this.renderList(tag));
+        break;
+      case T.Compound:
+        h.appendChild(this.renderCompound(tag));
+        break;
+      default: break;
+    }
+
+    // common actions
+    const acts = el('div', 'actions');
+    const addTypeBtn = el('button', null, '＋ New tag');
+    addTypeBtn.onclick = () => api.addTag(path);
+    acts.appendChild(addTypeBtn);
+    const dupBtn = el('button', null, 'Duplicate');
+    dupBtn.onclick = () => api.duplicate(tag, path);
+    acts.appendChild(dupBtn);
+    if (path.length > 0) {
+      const delBtn = el('button', null, 'Delete');
+      delBtn.className = 'danger';
+      delBtn.onclick = () => api.deleteTag(tag, path);
+      acts.appendChild(delBtn);
+    }
+    // always offer change type
+    const ctBtn = el('button', null, 'Change type…');
+    ctBtn.onclick = () => api.changeType(tag, path);
+    acts.appendChild(ctBtn);
+    const expBtn = el('button', null, 'Export SNBT');
+    expBtn.onclick = () => api.exportSNBT(tag, path);
+    acts.appendChild(expBtn);
+
+    h.appendChild(acts);
+    box.appendChild(h);
+  };
+
+  function nameFromPath(path) {
+    return path.length ? String(path[path.length - 1]) : '(root)';
+  }
+  function pathToStr(path) {
+    return '/' + path.map((s) => String(s)).join('/');
+  }
+
+  // ── scalar editors ──────────────────────────────────────────────────────────
+
+  Inspector.prototype.renderNumber = function (tag) {
+    const wrap = document.createElement('section');
+
+    const f = field('value');
+    const input = el('input', 'in');
+    input.value = String(tag.v);
+    input.spellcheck = false;
+
+    const commit = () => {
+      const parsed = ns.Tree && treeParse(tag, input.value);
+      if (parsed !== undefined && Number(parsed) !== Number(tag.v)) {
+        tag.v = parsed;
+        api.commit(tag);
+        this.render(tag, this.cur.path);
+      }
+    };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') commit(); });
+    input.addEventListener('blur', commit);
+    f.appendChild(input);
+
+    const chips = el('div', 'chips');
+    switch (tag.t) {
+      case T.Byte: {
+        const b = Number(tag.v) & 0xff;
+        chips.appendChild(chip('unsigned', b));
+        chips.appendChild(chip('hex', '0x' + b.toString(16).padStart(2, '0')));
+        chips.appendChild(chip('char', b >= 32 && b < 127 ? String.fromCharCode(b) : '·'));
+        if (b === 0 || b === 1) {
+          const set = (v) => () => { tag.v = v; api.commit(tag); this.render(tag, this.cur.path); };
+          const b1 = el('button', 'chip', 'false');
+          b1.onclick = set(0);
+          const b2 = el('button', 'chip', 'true');
+          b2.onclick = set(1);
+          chips.appendChild(b1); chips.appendChild(b2);
+        }
+        break;
+      }
+      case T.Short: {
+        const s = Number(tag.v) & 0xffff;
+        chips.appendChild(chip('unsigned', s));
+        chips.appendChild(chip('hex', '0x' + s.toString(16).padStart(4, '0')));
+        break;
+      }
+      case T.Int: {
+        const u = Number(tag.v) >>> 0;
+        chips.appendChild(chip('unsigned', u));
+        chips.appendChild(chip('hex', '0x' + (Number(tag.v) >>> 0).toString(16)));
+        break;
+      }
+      case T.Long: {
+        chips.appendChild(chip('hex', '0x' + (BigInt(tag.v) & 0xffffffffffffffffn).toString(16)));
+        chips.appendChild(chip('unsigned', String(BigInt(tag.v) & 0xffffffffffffffffn)));
+        break;
+      }
+      case T.Float: case T.Double:
+        chips.appendChild(chip('exact', String(tag.v)));
+        break;
+      default: break;
+    }
+    f.appendChild(chips);
+    wrap.appendChild(f);
+    return wrap;
+  };
+
+  function treeParse(tag, raw) {
+    switch (tag.t) {
+      case T.Byte: { const n = parseInt(raw, 10); return isNaN(n) ? undefined : (n & 0xff) << 24 >> 24; }
+      case T.Short: { const n = parseInt(raw, 10); return isNaN(n) ? undefined : (n & 0xffff) << 16 >> 16; }
+      case T.Int: { const n = parseInt(raw, 10); return isNaN(n) ? undefined : n | 0; }
+      case T.Long: { const t = raw.trim(); if (!/^[+-]?\d+$/.test(t)) return undefined; try { return BigInt(t); } catch (e) { return undefined; } }
+      case T.Float: { const n = parseFloat(raw); return isNaN(n) ? undefined : n; }
+      case T.Double: { const n = parseFloat(raw); return isNaN(n) ? undefined : n; }
+      default: return undefined;
+    }
+  }
+
+  Inspector.prototype.renderString = function (tag) {
+    const wrap = document.createElement('section');
+    const f = field('string');
+    const ta = el('textarea', 'in');
+    ta.value = tag.v;
+    ta.spellcheck = false;
+    const size = el('div', 'chip', 'length: ' + tag.v.length + ' chars · ' + ns.codec && nc(tag.v));
+    const commit = () => { if (ta.value !== tag.v) { tag.v = ta.value; api.commit(tag); } };
+    ta.addEventListener('change', commit);
+    f.appendChild(ta);
+    f.appendChild(size);
+
+    // JSON pretty preview if it parses
+    try {
+      const parsed = JSON.parse(tag.v);
+      const pretty = JSON.stringify(parsed, null, 2);
+      const jbtn = el('button', 'chip', 'looks like JSON — pretty');
+      jbtn.onclick = () => { ta.value = pretty; commit(); };
+      f.appendChild(jbtn);
+    } catch (e) { /* not JSON */ }
+    wrap.appendChild(f);
+    return wrap;
+
+    function nc(s) { return new TextEncoder().encode(s).length + ' bytes'; }
+  };
+
+  // ── array editors ───────────────────────────────────────────────────────────
+
+  Inspector.prototype.renderArray = function (tag) {
+    const wrap = document.createElement('section');
+    const t = el('div', 'section-title', tag.t === T.IntArray ? 'int[] — ' + tag.v.length : 'long[] — ' + tag.v.length);
+    wrap.appendChild(t);
+
+    const table = el('table', 'array-table');
+    const addRow = () => {
+      tag.v.push(tag.t === T.LongArray ? 0n : 0);
+      api.commit(tag);
+      this.render(tag, this.cur.path);
+    };
+    const delRow = (i) => {
+      tag.v.splice(i, 1);
+      api.commit(tag);
+      this.render(tag, this.cur.path);
+    };
+    const saveRow = (i) => {
+      const inp = table.rows[i + 1].querySelector('input');
+      const parsed = tag.t === T.LongArray ? parseLong(inp.value) : parseInt(inp.value, 10);
+      if (parsed !== undefined && !(parsed === tag.v[i])) {
+        tag.v[i] = parsed;
+        api.commit(tag);
+      }
+    };
+
+    tag.v.forEach((val, i) => {
+      const tr = el('tr');
+      tr.appendChild(el('td', 'idx', String(i)));
+      const td = el('td');
+      const inp = el('input');
+      inp.value = String(val);
+      inp.dataset.idx = i;
+      inp.addEventListener('change', () => saveRow(i));
+      td.appendChild(inp);
+      tr.appendChild(td);
+      const del = el('button', 'row-del', '✕');
+      del.onclick = () => delRow(i);
+      const tdd = el('td'); tdd.appendChild(del);
+      tr.appendChild(tdd);
+      table.appendChild(tr);
+    });
+    wrap.appendChild(table);
+    const add = el('button', null, '＋ add row');
+    add.onclick = addRow;
+    wrap.appendChild(add);
+    return wrap;
+
+    function parseLong(s) {
+      const t = String(s).trim();
+      if (!/^[+-]?\d+$/.test(t)) return undefined;
+      try { return BigInt(t); } catch (e) { return undefined; }
+    }
+  };
+
+  Inspector.prototype.renderByteArray = function (tag) {
+    const wrap = document.createElement('section');
+    const bytes = ns.codec.b64ToBytes(tag.v);
+    wrap.appendChild(el('div', 'section-title', 'byte[] — ' + bytes.length + ' bytes'));
+
+    const preview = el('div', 'hex-mini', hexRows(bytes));
+    wrap.appendChild(preview);
+
+    // image sniff
+    const imgDetect = detectImage(bytes);
+    if (imgDetect) {
+      const img = el('img', 'preview-img');
+      img.src = imgDetect;
+      const inners = imgDetect; // data url
+      void inners;
+      wrap.appendChild(img);
+    }
+
+    const f = field('replace bytes (hex or decimal, any separators)');
+    const ta = el('textarea', 'in');
+    ta.value = toHexWords(bytes);
+    const commit = () => {
+      const nb = parseByteList(ta.value);
+      if (nb !== null) {
+        tag.v = ns.codec.bytesToB64(nb);
+        api.commit(tag);
+        this.render(tag, this.cur.path);
+      }
+    };
+    ta.addEventListener('change', commit);
+    f.appendChild(ta);
+    wrap.appendChild(f);
+    return wrap;
+  };
+
+  function hexRows(bytes, perRow) {
+    perRow = perRow || 16;
+    let out = '';
+    for (let i = 0; i < bytes.length; i += perRow) {
+      out += i.toString(16).padStart(6, '0') + '  ';
+      for (let j = i; j < i + perRow && j < bytes.length; j++) {
+        out += bytes[j].toString(16).padStart(2, '0') + ' ';
+      }
+      out += '  ';
+      for (let j = i; j < i + perRow && j < bytes.length; j++) {
+        out += (bytes[j] >= 32 && bytes[j] < 127) ? String.fromCharCode(bytes[j]) : '.';
+      }
+      out += '\n';
+    }
+    return out === '' ? '(empty)' : out;
+  }
+
+  function toHexWords(bytes) {
+    return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join(' ');
+  }
+
+  function parseByteList(text) {
+    const words = text.trim().split(/[\s,;_]+/).filter(Boolean);
+    if (words.length === 0) return null;
+    const out = new Uint8Array(words.length);
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      const n = /^0x/i.test(w) ? parseInt(w, 16) : parseInt(w, 10);
+      if (isNaN(n) || n < 0 || n > 255) return null;
+      out[i] = n;
+    }
+    return out;
+  }
+
+  function detectImage(bytes) {
+    const isPng = bytes.length > 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+    const isJpeg = bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    if (!isPng && !isJpeg) return null;
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return 'data:image/' + (isPng ? 'png' : 'jpeg') + ';base64,' + btoa(bin);
+  }
+
+  // ── list & compound ─────────────────────────────────────────────────────────
+
+  Inspector.prototype.renderList = function (tag) {
+    const wrap = document.createElement('section');
+    wrap.appendChild(el('div', 'section-title', 'List<' + typeName(tag.et) + '> — ' + tag.v.length));
+
+    const f = field('entry type');
+    const sel = el('select', 'in');
+    for (const t of [1, 2, 3, 4, 5, 6, 8, 10]) {
+      const o = document.createElement('option');
+      o.value = t; o.textContent = typeName(t);
+      if (t === tag.et) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.addEventListener('change', () => {
+      if (tag.allowedLong) { /* noop */ }
+      // warn when changing entry type on non-empty list
+      if (tag.v.length > 0) { tag.v = []; }
+      tag.et = parseInt(sel.value, 10);
+      api.commit(tag);
+    });
+    f.appendChild(sel);
+    wrap.appendChild(f);
+
+    const add = el('button', null, '＋ add ' + typeName(tag.et));
+    add.onclick = () => {
+      const child = ns.createTag(tag.et, '');
+      tag.v.push(child);
+      api.commit(tag);
+    };
+    wrap.appendChild(add);
+    return wrap;
+  };
+
+  Inspector.prototype.renderCompound = function (tag) {
+    const wrap = document.createElement('section');
+    wrap.appendChild(el('div', 'section-title', 'Compound — ' + tag.v.length + ' entries'));
+    const add = el('button', null, '＋ add tag');
+    add.onclick = () => this.api.addTag(this.cur.path);
+    wrap.appendChild(add);
+    return wrap;
+  };
+
+  // ── smart cards ─────────────────────────────────────────────────────────────
+
+  Inspector.prototype.renderSmart = function (smart) {
+    const card = el('div', 'smart-card');
+    const head = el('div', 'sc-head');
+    head.appendChild(el('span', 'big', smart.title));
+    card.appendChild(head);
+
+    if (smart.kv) {
+      const grid = el('div', 'sc-grid');
+      for (const k in smart.kv) {
+        const kv = el('div', 'sc-kv');
+        kv.appendChild(el('b', null, k));
+        kv.appendChild(el('span', null, String(smart.kv[k])));
+        grid.appendChild(kv);
+      }
+      card.appendChild(grid);
+    }
+
+    if (smart.inventory) this.renderInventory(card, smart.inventory, 'Items');
+    if (smart.items) this.renderInventory(card, smart.items, 'Inventory');
+    if (smart.kind === 'itemStack' && smart.item) {
+      const inv = el('div', 'smart-inv');
+      inv.appendChild(this.itemRow(smart.item));
+      card.appendChild(inv);
+    }
+    return card;
+  };
+
+  Inspector.prototype.renderInventory = function (card, items, title) {
+    const inv = el('div', 'smart-inv');
+    inv.appendChild(el('div', 'section-title', title));
+    for (const it of items) inv.appendChild(this.itemRow(it));
+    card.appendChild(inv);
+  };
+
+  Inspector.prototype.itemRow = function (it) {
+    const row = el('div', 'slot');
+    const cnt = el('span', 'count', it.count !== undefined ? 'x' + it.count : '');
+    row.appendChild(cnt);
+    row.appendChild(el('span', 'name', it.displayName));
+    const extra = el('span', 'extra', String(it.id));
+    row.appendChild(extra);
+    return row;
+  };
+
+  function chip(label, value) {
+    const c = el('span', 'chip');
+    c.appendChild(el('b', null, label));
+    c.appendChild(document.createTextNode(': ' + value));
+    return c;
+  }
+
+  ns.Inspector = Inspector;
+  ns.arrayTypeIs = (t) => IA_TYPES.includes(t);
+  ns.detectImage = detectImage;
+  ns.hexRows = hexRows;
+  ns.parseByteList = parseByteList;
+
+  return ns;
+})(window.NBT || {});
+
+/* ===== src/app.js ===== */
+/* ─────────────────────────────────────────────────────────────────────────────
+ * app.js — application shell: documents, history, toolbar, menus, region.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+window.App = (function (ns) {
+  'use strict';
+  const { T, isCompound, isList, clone } = ns;
+
+  const A = {
+    doc: null,          // { kind:'nbt'|'chunk', filename, model, mode, region?, x?, z?, compression? }
+    region: null,       // { container, filename } for open region documents
+    hist: [], future: [],
+    clipboard: null,
+    selectedPath: null,
+    hexOn: true, smartOn: true, theme: 'dark',
+    inspector: null, tree: null,
+  };
+
+  // ── dom ─────────────────────────────────────────────────────────────────────
+
+  let $ = (s) => document.querySelector(s);
+  let refs = {};
+
+  function grab() {
+    refs = {
+      tree: $('#tree'), inspector: $('#inspector'),
+      hex: $('#hexview'), status: {
+        file: $('#st-file'), mode: $('#st-mode'), count: $('#st-count'),
+        errors: $('#st-errors'), history: $('#st-history'),
+      },
+      shade: $('#loading-shade'), loading: $('#loading-text'),
+      empty: $('#empty-state'), file: $('#file-input'), drop: $('#drop-zone'),
+      search: $('#search-field'),
+    };
+  }
+
+  // ── history ─────────────────────────────────────────────────────────────────
+
+  function pushHistory() {
+    if (!A.doc || A.doc.kind !== 'nbt' && A.doc.kind !== 'chunk') return;
+    A.hist.push(clone(A.doc.model));
+    if (A.hist.length > 200) A.hist.shift();
+    A.future.length = 0;
+    A.refreshHistory();
+  }
+
+  function undo() {
+    if (!A.hist.length) return;
+    A.future.push(clone(A.doc.model));
+    A.doc.model = A.hist.pop();
+    A.refreshAll();
+  }
+
+  function redo() {
+    if (!A.future.length) return;
+    A.hist.push(clone(A.doc.model));
+    A.doc.model = A.future.pop();
+    A.refreshAll();
+  }
+
+  // ── tree wiring ─────────────────────────────────────────────────────────────
+
+  function makeTree() {
+    A.tree = new ns.Tree({
+      el: refs.tree,
+      root: A.doc ? A.doc.model : null,
+      movable: true,
+      onSelect: (path) => {
+        A.selectedPath = path;
+        renderInspector();
+      },
+      onCommit: (tag) => { commitEdit(); },
+      onRename: (tag, path, newName) => { commitRename(tag, path, newName); },
+      onMove: (info) => { moveTag(info); },
+      onContextMenu: (path, x, y) => { showContextMenu(path, x, y); },
+    });
+    renderInspector();
+  }
+
+  function commitEdit() {
+    pushHistory();
+    A.refreshAll();
+  }
+
+  function commitRename(tag, path, newName) {
+    if (!A.doc) return;
+    pushHistory();
+    if (path.length === 0) {
+      tag.n = newName;
+    } else {
+      const parent = ns.getByPath(A.doc.model, path.slice(0, -1));
+      const key = path[path.length - 1];
+      if (isCompound(parent)) {
+        const pair = parent.v.find(([k]) => k === key);
+        if (pair) { pair[0] = newName; tag.n = newName; }
+      } else if (isList(parent)) {
+        tag.n = newName; // list children have no key; name is informational
+      }
+    }
+    A.refreshAll();
+  }
+
+  // ── refresh ─────────────────────────────────────────────────────────────────
+
+  function refreshAll() {
+    if (A.doc && (A.doc.kind === 'nbt' || A.doc.kind === 'chunk')) {
+      A.tree.root = A.doc.model;
+      refs.tree.classList.remove('hidden');
+      A.refreshTree();
+      renderInspector();
+      updateHex();
+      A.refreshStatus();
+      A.refreshButtons();
+    } else if (A.doc && A.doc.kind === 'region') {
+      refs.tree.classList.add('hidden');
+      renderRegionGrid();
+    }
+  }
+
+  // ── inspector ───────────────────────────────────────────────────────────────
+
+  function currentTag() {
+    if (!A.doc || A.doc.kind === 'region') return null;
+    if (!A.selectedPath) return null;
+    return ns.getByPath(A.doc.model, A.selectedPath);
+  }
+
+  function renderInspector() {
+    if (!A.inspector) {
+      A.inspector = new ns.Inspector({
+        el: refs.inspector,
+        smartEnabled: () => A.smartOn,
+        commit: () => commitEdit(),
+        addTag: (path) => addTag(path),
+        renameTag: (path) => {
+          const tag = ns.getByPath(A.doc.model, path);
+          if (tag) A.tree.beginNameEdit(path, tag);
+        },
+        deleteTag: (tag, path) => deleteTag(path),
+        duplicate: (tag, path) => duplicateTag(tag, path),
+        changeType: (tag, path) => changeTypeMenu(tag, path),
+        exportSNBT: (tag, path) => exportSNBT(tag),
+      });
+    }
+    const tag = currentTag();
+    if (!tag) { refs.inspector.innerHTML = '<div class="panel-empty">Select a tag to inspect &amp; edit it.</div>'; return; }
+    A.inspector.render(tag, A.selectedPath);
+  }
+
+  // ── structural ops ──────────────────────────────────────────────────────────
+
+  function parentOf(path) {
+    return path.length ? ns.getByPath(A.doc.model, path.slice(0, -1)) : null;
+  }
+
+  function addTag(path) {
+    if (!A.doc) return;
+    pushHistory();
+    const target = ns.getByPath(A.doc.model, path);
+    const container = target && (isCompound(target) || isList(target)) ? target : parentOf(path);
+    if (!container) return;
+    const newPath = [];
+    if (isCompound(container)) {
+      const name = nextFreeKey(container, 'new_tag');
+      const child = ns.createTag(T.Compound, name);
+      container.v.push([name, child]);
+      newPath.push(...path, name);
+    } else if (isList(container)) {
+      const child = ns.createTag(container.et, '');
+      container.v.push(child);
+      newPath.push(...path, String(container.v.length - 1));
+    }
+    A.refreshAll();
+    if (newPath.length) { A.selectedPath = newPath; A.tree.select(newPath, true); }
+  }
+
+  function nextFreeKey(container, base) {
+    let name = base, i = 1;
+    while (container.v.some(([k]) => k === name)) name = base + '_' + (i++);
+    return name;
+  }
+
+  function deleteTag(path) {
+    if (!A.doc || path.length === 0) return;
+    pushHistory();
+    const parent = ns.getByPath(A.doc.model, path.slice(0, -1));
+    const key = path[path.length - 1];
+    if (!parent) return;
+    if (isCompound(parent)) {
+      const i = parent.v.findIndex(([k]) => k === key);
+      if (i >= 0) parent.v.splice(i, 1);
+    } else if (isList(parent)) {
+      parent.v.splice(Number(key), 1);
+    }
+    A.selectedPath = path.slice(0, -1);
+    A.refreshAll();
+  }
+
+  function duplicateTag(tag, path) {
+    if (!A.doc) return;
+    pushHistory();
+    const parent = ns.getByPath(A.doc.model, path.slice(0, -1));
+    const key = path[path.length - 1];
+    const copy = clone(tag);
+    if (isCompound(parent)) {
+      const name = nextFreeKey(parent, key + '_copy');
+      parent.v.push([name, copy]);
+      copy.n = name;
+      A.selectedPath = path.slice(0, -1).concat([name]);
+    } else if (isList(parent)) {
+      parent.v.splice(Number(key) + 1, 0, copy);
+      A.selectedPath = path.slice(0, -1).concat([String(Number(key) + 1)]);
+    } else return;
+    A.refreshAll();
+  }
+
+  function changeTypeMenu(tagObj, path) {
+    const x = 0, y = 0;
+    const items = [1, 2, 3, 4, 5, 6, 8, 7, 9, 10, 11, 12].map((t) => ({
+      label: ns.typeName(t), icon: ns.iconSvg(t),
+      action: () => changeType(path, t),
+    }));
+    showMenu(x, y, items);
+  }
+
+  function changeType(path, newType) {
+    if (!A.doc) return;
+    pushHistory();
+    const tag = ns.getByPath(A.doc.model, path);
+    if (!tag) return;
+    const oldT = tag.t;
+    tag.t = newType;
+    tag.et = undefined;
+    const fresh = ns.createTag(newType, tag.n);
+    tag.v = fresh.v;
+    if (isList(tag)) tag.et = fresh.et;
+    // try convert numeric values
+    if (isNumeric(oldT) && isNumeric(newType) && !isLong(oldT) && !isLong(newType)) {
+      tag.v = oldT === newType ? tag.v : Number(tag.v);
+    }
+    if (newType === T.Long && isNumeric(oldT) && !isLong(oldT)) tag.v = BigInt(Math.trunc(Number(tag.v)));
+    if (oldT === T.Long && isNumeric(newType)) { /* can't safely shrink; leave as-is */ tag.v = Number(tag.v); }
+    A.refreshAll();
+  }
+
+  function isNumeric(t) { return t >= T.Byte && t <= T.Double; }
+  function isLong(t) { return t === T.Long; }
+
+  // ── tree dnd create handler ────────────────────────────────────────────────
+
+  function moveTag(info) {
+    if (!A.doc) return;
+    const { fromPath, destPath, zone, destIsContainer } = info;
+
+    const parent = parentOf(fromPath);
+    const key = fromPath[fromPath.length - 1];
+    if (!parent) return;
+
+    // prevent self-contain
+    const fp = fromPath.join('\u001f'), dp = destPath.join('\u001f');
+    if (dp.startsWith(fp + '\u001f')) return;
+
+    pushHistory();
+    // detach
+    let tag;
+    if (isCompound(parent)) {
+      const i = parent.v.findIndex(([k]) => k === key);
+      tag = parent.v[i][1];
+      parent.v.splice(i, 1);
+    } else {
+      tag = parent.v.splice(Number(key), 1)[0];
+    }
+
+    const insertAt = (container, index, moved) => {
+      if (isCompound(container)) {
+        const name = nextFreeKey(container, tag.n || 'new_tag');
+        container.v.splice(index, 0, [name, moved]);
+        moved.n = name;
+      } else {
+        // list: keep uniform type
+        if (isList(container)) {
+          if (container.et !== T.End && container.et !== moved.t) {
+            if (container.v.length === 0) container.et = moved.t;
+            else { A.refreshAll(); toast('Cannot move ' + ns.typeName(moved.t) + ' into List<' + ns.typeName(container.et) + '>', 'err'); return; }
+          }
+          if (container.v.length === 0) container.et = moved.t;
+        }
+        container.v.splice(index, 0, moved);
+      }
+    };
+
+    if (zone === 'mid' && destIsContainer) {
+      const dest = ns.getByPath(A.doc.model, destPath);
+      insertAt(dest, 0, tag);
+      A.selectedPath = destPath.concat([compoundKey(dest, 0, tag)]);
+    } else {
+      const destParent = parentOf(destPath);
+      const dKey = destPath[destPath.length - 1];
+      let index;
+      if (isCompound(destParent)) {
+        index = destParent.v.findIndex(([k]) => k === dKey);
+      } else {
+        index = Number(dKey);
+      }
+      if (index < 0) index = 0;
+      if (zone === 'bottom') index += 1;
+      insertAt(destParent, index, tag);
+      A.selectedPath = destPath.slice(0, -1).concat([compoundKey(destParent, index < destParent.v.length ? index : index, tag)]);
+    }
+
+    A.refreshAll();
+  }
+
+  function compoundKey(container, i, tag) {
+    return isCompound(container) ? container.v[i] && container.v[i][0] : String(i);
+  }
+
+  // ── menus ───────────────────────────────────────────────────────────────────
+
+  function showContextMenu(path, x, y) {
+    if (!A.doc) return;
+    const tag = ns.getByPath(A.doc.model, path);
+    if (!tag) return;
+
+    const items = [];
+    if (path.length > 0) {
+      items.push({ label: 'Rename…', key: 'F2', action: () => A.tree.beginNameEdit(path, tag) });
+      items.push({ label: 'Duplicate', action: () => duplicateTag(tag, path) });
+      items.push({ label: 'Copy', key: 'Ctrl+C', action: () => copyTag(tag) });
+      if (A.clipboard) items.push({ label: 'Paste after', key: 'Ctrl+V', action: () => pasteAfter(path) });
+    } else {
+      items.push({ label: 'Rename…', action: () => A.tree.beginNameEdit(path, tag) });
+    }
+    items.push({ sep: true });
+
+    if (isCompound(tag)) {
+      items.push({
+        label: '▾ New', submenu: [
+          [1, 2, 3, 4, 5, 6, 8, 7, 11, 12, 9, 10].map((t) => ({
+            label: ns.typeName(t), icon: ns.iconSvg(t),
+            action: () => { pushHistory(); const name = nextFreeKey(tag, 'new_tag'); const c = ns.createTag(t, name); tag.v.push([name, c]); A.refreshAll(); },
+          })),
+        ],
+      });
+      items.push({ label: 'Sort keys', action: () => { pushHistory(); tag.v.sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0); A.refreshAll(); } });
+    }
+    if (isList(tag)) {
+      items.push({
+        label: 'Add element', action: () => {
+          pushHistory();
+          const c = ns.createTag(tag.et === T.End ? T.Int : tag.et, '');
+          tag.v.push(c);
+          if (tag.et === T.End) tag.et = c.t;
+          A.refreshAll();
+        },
+      });
+      items.push({
+        label: '▾ Element type', submenu: [
+          [1, 2, 3, 4, 5, 6, 8, 10].map((t) => ({
+            label: ns.typeName(t), icon: ns.iconSvg(t),
+            action: () => { pushHistory(); if (tag.v.length) tag.v = []; tag.et = t; A.refreshAll(); },
+          })),
+        ],
+      });
+    }
+    if (path.length > 0) {
+      items.push({ label: 'Delete', key: 'Del', danger: true, action: () => deleteTag(path) });
+    }
+
+    items.push({ sep: true });
+    items.push({ label: '▾ Change type', submenu: [
+      [1, 2, 3, 4, 5, 6, 8, 7, 11, 12, 9, 10].map((t) => ({
+        label: ns.typeName(t), icon: ns.iconSvg(t), action: () => changeType(path, t),
+      })),
+    ] });
+
+    showMenu(x, y, items);
+  }
+
+  function showMenu(x, y, items) {
+    closeMenus();
+    const menu = el2('div'); menu.className = 'menu';
+    for (const it of items) {
+      if (it.sep) { menu.appendChild(el2('div')); menu.lastChild.className = 'sep'; continue; }
+      if (it.submenu) {
+        const sub = el2('div'); sub.className = 'sub';
+        const mi = el2('div'); mi.className = 'mi';
+        mi.innerHTML = it.label;
+        sub.appendChild(mi);
+        const child = el2('div'); child.className = 'sub-child';
+        for (const c of it.submenu[0]) {
+          const ci = el2('div'); ci.className = 'mi';
+          if (c.icon) ci.insertAdjacentHTML('beforeend', c.icon);
+          ci.appendChild(document.createTextNode(c.label));
+          ci.onclick = () => { closeMenus(); c.action(); };
+          child.appendChild(ci);
+        }
+        sub.appendChild(child);
+        menu.appendChild(sub);
+        continue;
+      }
+      const mi = el2('div'); mi.className = 'mi' + (it.danger ? ' danger' : '');
+      mi.appendChild(document.createTextNode(it.label));
+      if (it.key) { const k = el2('span'); k.className = 'mk'; k.textContent = it.key; mi.appendChild(k); }
+      mi.onclick = () => { closeMenus(); it.action(); };
+      menu.appendChild(mi);
+    }
+    document.body.appendChild(menu);
+    const r = menu.getBoundingClientRect();
+    menu.style.left = Math.min(x, window.innerWidth - r.width - 8) + 'px';
+    menu.style.top = Math.min(y, window.innerHeight - r.height - 8) + 'px';
+    setTimeout(() => document.addEventListener('click', closeMenus, { once: true }), 10);
+  }
+
+  function closeMenus() {
+    document.querySelectorAll('.menu').forEach((m) => m.remove());
+  }
+
+  function el2(tag) { return document.createElement(tag); }
+
+  // ── clipboard ───────────────────────────────────────────────────────────────
+
+  function copyTag(tag) { A.clipboard = clone(tag); toast('Copied ' + ns.typeName(tag.t)); }
+
+  function pasteAfter(path) {
+    if (!A.doc || !A.clipboard) return;
+    pushHistory();
+    const parent = parentOf(path);
+    if (isCompound(parent)) {
+      const key = path[path.length - 1];
+      const i = parent.v.findIndex(([k]) => k === key);
+      const copy = clone(A.clipboard);
+      const name = nextFreeKey(parent, 'copy_' + key);
+      copy.n = name;
+      parent.v.splice(i + 1, 0, [name, copy]);
+    } else if (isList(parent)) {
+      const copy = clone(A.clipboard);
+      parent.v.splice(Number(path[path.length - 1]) + 1, 0, copy);
+    } else return;
+    A.refreshAll();
+  }
+
+  // ── files ───────────────────────────────────────────────────────────────────
+
+  async function openFile(file) {
+    const buf = new Uint8Array(await file.arrayBuffer());
+    // region probe
+    if (ns.region.probe(buf) || /\.(mca|mcr)$/i.test(file.name)) {
+      A.region = { container: ns.region.create(buf), filename: file.name };
+      A.doc = { kind: 'region', filename: file.name };
+      refs.empty.classList.add('hidden');
+      A.refreshStatus();
+      refreshAll();
+      return;
+    }
+    const loaded = await ns.codec.loadBuffer(buf);
+    if (!loaded.decoded) {
+      toast('Could not parse file as NBT', 'err');
+      return;
+    }
+    A.doc = {
+      kind: 'nbt', filename: file.name, model: loaded.res.root, mode: loaded.mode,
+    };
+    A.hist = []; A.future = [];
+    A.selectedPath = null;
+    refs.empty.classList.add('hidden');
+    A.refreshStatus();
+    refreshAll();
+    if ((loaded.res.errors || []).length) {
+      toast('Parse had issues (' + loaded.res.errors.length + ') — lenient mode', 'warn');
+    }
+  }
+
+  async function saveDoc() {
+    if (!A.doc) return;
+    if (A.doc.kind === 'region') {
+      const bytes = await A.region.container.pack();
+      ns.codec.download(bytes, A.region.filename);
+      toast('Saved region file');
+      return;
+    }
+    if (A.doc.kind === 'chunk' && A.doc.region) {
+      // write back to region container (dirty chunk)
+      if (A.doc.region && A.doc.region.container) {
+        A.doc.region.container.setChunkModel(A.doc.x, A.doc.z, A.doc.model, 2);
+      }
+      toast('Staged chunk r.' + A.doc.x + '.' + A.doc.z + ' — save the region file to write', 'warn');
+      return;
+    }
+    const bytes = await ns.codec.compileModel(A.doc.model, A.doc.mode || 'gzip');
+    ns.codec.download(bytes, A.doc.filename);
+    toast('Saved ' + A.doc.filename);
+  }
+
+  // ── region grid ─────────────────────────────────────────────────────────────
+
+  function renderRegionGrid() {
+    const c = A.region.container;
+    const chunks = c.listChunks();
+    const box = el2('div');
+    box.style.cssText = 'padding:14px;overflow:auto;height:100%';
+    box.innerHTML = '<h2 style="margin-bottom:8px">Region file — ' + chunks.length + ' chunks</h2>';
+    const grid = el2('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px';
+    if (chunks.length === 0) {
+      box.appendChild(grid);
+      const none = el2('div');
+      none.textContent = 'No chunks in this region.';
+      box.appendChild(none);
+      refs.tree.innerHTML = '';
+      refs.tree.appendChild(box);
+      return;
+    }
+    for (const chunk of chunks) {
+      const cell = el2('button');
+      cell.textContent = 'r.' + chunk.x + '.' + chunk.z;
+      cell.style.cssText = 'text-align:left;padding:6px';
+      cell.onclick = async () => {
+        const model = await c.chunkModel(chunk.x, chunk.z);
+        if (!model) { toast('Chunk unreadable', 'err'); return; }
+        A.doc = { kind: 'chunk', filename: chunk.x + '.' + chunk.z + '.nbt', model, mode: 'zlib', region: c, x: chunk.x, z: chunk.z };
+        A.hist = []; A.future = [];
+        A.selectedPath = null;
+        refs.tree.classList.remove('hidden');
+        A.refreshStatus();
+        refreshAll();
+      };
+      grid.appendChild(cell);
+    }
+    box.appendChild(grid);
+    // save region button
+    const saveBtn = el2('button');
+    saveBtn.textContent = 'Save region file';
+    saveBtn.style.marginTop = '12px';
+    saveBtn.onclick = async () => {
+      if (A.doc.kind === 'chunk') {
+        A.region.container.setChunkModel(A.doc.x, A.doc.z, A.doc.model, 2);
+        A.doc = { kind: 'region', filename: A.region.filename };
+        refreshAll();
+        await new Promise((r) => setTimeout(r, 30));
+      }
+      const bytes = await A.region.container.pack();
+      ns.codec.download(bytes, A.region.filename);
+      toast('Saved region file');
+    };
+    refs.tree.innerHTML = '';
+    refs.tree.appendChild(box);
+  }
+
+  // ── hex ─────────────────────────────────────────────────────────────────────
+
+  function updateHex() {
+    if (!A.hexOn) return;
+    if (!A.doc || A.doc.kind === 'region') { refs.hex.textContent = ''; return; }
+    try {
+      const wasm = ns.codec._module;
+      const b64 = wasm.encode(A.doc.model);
+      const bytes = ns.codec.b64ToBytes(b64);
+      refs.hex.textContent = ns.hexRows(bytes, 16);
+    } catch (e) { refs.hex.textContent = '…'; }
+  }
+
+  // ── status / buttons ────────────────────────────────────────────────────────
+
+  function refreshStatus() {
+    const s = refs.status;
+    if (!A.doc) return;
+    s.file.textContent = A.doc.filename || '—';
+    if (A.doc.kind === 'region') {
+      s.mode.textContent = 'region · ' + A.region.container.listChunks().length + ' chunks';
+      s.count.textContent = '';
+      s.errors.textContent = '';
+    } else {
+      const mode = A.doc.kind === 'chunk' ? ('chunk ' + A.doc.x + '.' + A.doc.z + ') ') : '';
+      s.mode.textContent = mode + (ns.codec.MODES[A.doc.mode] ? ns.codec.MODES[A.doc.mode].label : '');
+      s.count.textContent = ns.countTags(A.doc.model) + ' tags';
+      s.errors.textContent = '';
+      if (A.doc.model && A.doc.n) {}
+    }
+    refreshHistory();
+  }
+
+  function refreshHistory() {
+    refs.status.history.textContent = A.hist.length ? 'hist ' + A.hist.length : '';
+  }
+
+  function refreshButtons() {
+    const has = !!(A.doc && A.doc.kind !== 'region');
+    $('#btn-undo').disabled = A.hist.length === 0;
+    $('#btn-redo').disabled = A.future.length === 0;
+    $('#btn-delete').disabled = !has || !A.selectedPath || A.selectedPath.length === 0;
+    $('#btn-duplicate').disabled = !has || !A.selectedPath;
+  }
+
+  // ── formats ─────────────────────────────────────────────────────────────────
+
+  function exportSNBT(tag) {
+    const text = ns.toSNBT(tag, { indent: true });
+    ns.codec.download(new TextEncoder().encode(text), 'tag.snbt', 'text/plain');
+  }
+
+  function exportCurrentSNBT() {
+    if (!A.doc || A.doc.kind === 'region') return;
+    const text = ns.toSNBT(A.doc.model, { indent: true });
+    ns.codec.download(new TextEncoder().encode(text), A.doc.filename.replace(/\.[^.]+$/, '') + '.snbt', 'text/plain');
+  }
+
+  function exportCurrentJSON() {
+    if (!A.doc || A.doc.kind === 'region') return;
+    const text = JSON.stringify(ns.toJSON(A.doc.model), null, 2);
+    ns.codec.download(new TextEncoder().encode(text), A.doc.filename.replace(/\.[^.]+$/, '') + '.json', 'application/json');
+  }
+
+  async function importText(file) {
+    const text = await file.text();
+    try {
+      const tag = ns.parseSNBT(text);
+      A.doc = { kind: 'nbt', filename: file.name.replace(/\.(snbt|txt|nbt)$/i, '.dat'), model: tag, mode: 'gzip' };
+      A.hist = []; A.future = [];
+      A.selectedPath = null;
+      refs.empty.classList.add('hidden');
+      A.refreshStatus();
+      refreshAll();
+      toast('Imported from SNBT');
+    } catch (e) {
+      try {
+        const obj = JSON.parse(text);
+        const tag = ns.fromJSON(obj);
+        A.doc = { kind: 'nbt', filename: file.name.replace(/\.json$/i, '.dat'), model: tag, mode: 'gzip' };
+        A.hist = []; A.future = [];
+        A.selectedPath = null;
+        refs.empty.classList.add('hidden');
+        A.refreshStatus();
+        refreshAll();
+        toast('Imported from JSON');
+      } catch (e2) {
+        toast('Import failed: ' + e.message, 'err');
+      }
+    }
+  }
+
+  function showFormatsMenu(x, y) {
+    const items = [
+      { label: 'Export as SNBT', action: exportCurrentSNBT },
+      { label: 'Export as JSON', action: exportCurrentJSON },
+      { sep: true },
+      { label: 'Import SNBT / JSON file…', action: () => refs.file.click() },
+    ];
+    showMenu(x, y, items);
+  }
+
+  // ── toast ───────────────────────────────────────────────────────────────────
+
+  let toastsBox = null;
+  function toast(msg, kind) {
+    if (!toastsBox) { toastsBox = el2('div'); toastsBox.id = 'toasts'; document.body.appendChild(toastsBox); }
+    const t = el2('div'); t.className = 'toast ' + (kind || '');
+    t.textContent = msg;
+    toastsBox.appendChild(t);
+    setTimeout(() => t.remove(), 2600);
+  }
+
+  // ── theme ───────────────────────────────────────────────────────────────────
+
+  function applyTheme() {
+    document.documentElement.dataset.theme = A.theme;
+    try { localStorage.setItem('webnbt-theme', A.theme); } catch (e) {}
+  }
+
+  // ── events ──────────────────────────────────────────────────────────────────
+
+  function wire() {
+    $('#btn-open').onclick = () => refs.file.click();
+    $('#btn-save').onclick = saveDoc;
+    $('#btn-undo').onclick = () => { undo(); A.refreshButtons && A.refreshButtons(); };
+    $('#btn-redo').onclick = () => { redo(); };
+    $('#btn-delete').onclick = () => A.selectedPath && deleteTag(A.selectedPath);
+    $('#btn-duplicate').onclick = () => {
+      const tag = currentTag();
+      if (tag && A.selectedPath) duplicateTag(tag, A.selectedPath);
+    };
+    $('#btn-add').onclick = () => { const p = A.selectedPath || []; addTag(p); };
+    $('#btn-hex').onclick = (e) => {
+      A.hexOn = !A.hexOn;
+      e.target.classList.toggle('active', A.hexOn);
+      refs.hex.classList.toggle('hidden', !A.hexOn);
+      if (A.hexOn) updateHex();
+      document.body.classList.toggle('no-right-inset', !A.hexOn);
+    };
+    $('#btn-smart').onclick = (e) => {
+      A.smartOn = !A.smartOn;
+      e.target.classList.toggle('active', A.smartOn);
+      renderInspector();
+    };
+    $('#btn-theme').onclick = () => {
+      A.theme = A.theme === 'dark' ? 'light' : 'dark';
+      applyTheme();
+    };
+    $('#btn-export').onclick = (e) => {
+      const r = e.target.getBoundingClientRect();
+      showFormatsMenu(r.left, r.bottom);
+    };
+
+    refs.file.addEventListener('change', (e) => {
+      for (const f of e.target.files) openFile(f);
+      refs.file.value = '';
+    });
+
+    // drag & drop
+    let dragDepth = 0;
+    window.addEventListener('dragenter', (e) => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
+    window.addEventListener('dragleave', (e) => { e.preventDefault(); if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    refs.drop.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dragDepth = 0;
+      document.body.classList.remove('dragging');
+      for (const f of e.dataTransfer.files) openFile(f);
+    });
+
+    // search
+    let searchTimer = null;
+    refs.search.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => A.tree && A.tree.applySearch(refs.search.value.trim()), 180);
+    });
+    refs.search.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && A.tree) { e.preventDefault(); A.tree.focusSearch(A.tree.searchIdx + 1); }
+      if (e.key === 'Escape') { refs.search.value = ''; A.tree && A.tree.applySearch(''); }
+    });
+
+    $('#empty-open').onclick = () => refs.file.click();
+
+    // keyboard
+    window.addEventListener('keydown', (e) => {
+      const tgt = e.target;
+      if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) {
+        if (e.key === 'Escape') { closeMenus(); refs.tree.focus(); }
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === 'o') { e.preventDefault(); refs.file.click(); }
+      else if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); saveDoc(); }
+      else if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+      else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+      else if (mod && e.key.toLowerCase() === 'c') { const t = currentTag(); if (t) copyTag(t); }
+      else if (mod && e.key.toLowerCase() === 'v') { if (A.selectedPath) pasteAfter(A.selectedPath); }
+      else if (e.key === 'Delete' || e.key === 'Backspace') { if (A.selectedPath && A.selectedPath.length) deleteTag(A.selectedPath); }
+      else if (e.key === 'F2') { if (A.selectedPath) { const t = currentTag(); if (t) A.tree.beginNameEdit(A.selectedPath, t); } }
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        // basic navigation: select next/prev visible node
+        const all = Array.from(refs.tree.querySelectorAll('li'));
+        if (all.length) {
+          const cur = all.findIndex((li) => li.classList.contains('selected'));
+          const ni = Math.max(0, Math.min(all.length - 1, cur === -1 ? 0 : cur + (e.key === 'ArrowDown' ? 1 : -1)));
+          const path = all[ni].dataset.path.split('\u001f').filter(Boolean);
+          A.tree.select(path, true);
+        }
+        e.preventDefault();
+      }
+    });
+
+    // theme init
+    try { const saved = localStorage.getItem('webnbt-theme'); if (saved) A.theme = saved; } catch (e2) {}
+    applyTheme();
+  }
+
+  // ── boot ────────────────────────────────────────────────────────────────────
+
+  async function boot() {
+    if (A.booted) return;
+    A.booted = true;
+    grab();
+    const start = performance.now();
+    refs.loading.textContent = 'Booting NBT codec…';
+    await ns.codec.ready();
+    refs.loading.textContent = 'Ready';
+    refs.shade.classList.add('done');
+    makeTree();
+    wire();
+    refreshButtons();
+    setTimeout(() => refs.shade.remove(), 400);
+  }
+
+  A.refreshAll = refreshAll;
+  A.refreshStatus = refreshStatus;
+  A.refreshButtons = refreshButtons;
+  A.refreshTree = () => A.tree.refresh();
+  A.refreshHistory = refreshHistory;
+
+  return {
+    boot,
+    undo, redo,
+    pushHistory,
+    toast,
+    saveDoc,
+    openFile,
+  };
+})(window.NBT || {});
+
+window.addEventListener('DOMContentLoaded', () => {
+  window.App.boot();
+});
+</script>
+  <script src="src/codec.js"></script>
+  <script src="src/format.js"></script>
+  <script src="src/region.js"></script>
+  <script src="src/mcdata.js"></script>
+  <script src="src/treeview.js"></script>
+  <script src="src/inspector.js"></script>
+  <script src="src/app.js"></script>
+</head>
+<body>
+  <div id="drop-zone">
+    <div class="dz-box">
+      <div class="dz-title">Drop a file here</div>
+      <div class="dz-sub">.dat &middot; .schematic &middot; .mcmeta &middot; .mca / .mcr (region) &middot; any NBT
+        (gzip, zlib, raw deflate or uncompressed)</div>
+    </div>
+  </div>
+
+  <div id="loading-shade">
+    <div class="load-box">
+      <div class="spinner"></div>
+      <div id="loading-text">Booting NBT codec…</div>
+    </div>
+  </div>
+
+  <header id="topbar">
+    <div id="brand" title="webNBT — NBT editor">▣ webNBT</div>
+    <div id="toolbar">
+      <button id="btn-open" title="Open file (Ctrl+O)">Open</button>
+      <button id="btn-save" title="Save file (Ctrl+S)">Save</button>
+      <button id="btn-export" title="Import / export as SNBT or JSON">⇅ Formats</button>
+
+      <span class="tb-sep"></span>
+
+      <button id="btn-undo" title="Undo (Ctrl+Z)" disabled>↶</button>
+      <button id="btn-redo" title="Redo (Ctrl+Y)" disabled>↷</button>
+
+      <span class="tb-sep"></span>
+
+      <button id="btn-add" title="Add tag">＋</button>
+      <button id="btn-duplicate" title="Duplicate" disabled>⧉</button>
+      <button id="btn-delete" title="Delete tag (Del)" disabled>🗑</button>
+
+      <span class="tb-sep"></span>
+
+      <button id="btn-hex" title="Toggle hex view" class="active"># Hex</button>
+      <button id="btn-smart" title="Smart views for structures/inventories" class="active">✲ Smart</button>
+      <button id="btn-theme" title="Toggle theme">🌓</button>
+    </div>
+    <div id="search-wrap">
+      <input id="search-field" type="search" placeholder="Search tags… (Enter next)" autocomplete="off" />
+    </div>
+  </header>
+
+  <main id="layout">
+    <section id="tree-pane">
+      <div id="tree" tabindex="0"></div>
+      <div id="empty-state">
+        <div class="es-big">No file loaded</div>
+        <div class="es-sub">Click <b>Open</b>, drop a file anywhere, or <button id="empty-open">browse…</button></div>
+      </div>
+    </section>
+
+    <section id="right-pane">
+      <div id="inspector">
+        <div class="panel-empty">Select a tag to inspect &amp; edit it.</div>
+      </div>
+      <div id="hexview" class="hidden"></div>
+    </section>
+  </main>
+
+  <footer id="statusbar">
+    <span id="st-file">—</span>
+    <span id="st-mode"></span>
+    <span id="st-count"></span>
+    <span id="st-errors"></span>
+    <span id="st-history"></span>
+  </footer>
+
+  <input type="file" id="file-input" multiple hidden />
+</body>
+</html>

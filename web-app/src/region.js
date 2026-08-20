@@ -41,7 +41,8 @@ window.NBT = (function (ns) {
       if (data.length < 5) return null;
       const length = ((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]) >>> 0;
       const compression = data[4];
-      const payload = data.subarray(5, Math.min(5 + length, data.length));
+      // length includes the 1-byte compression field; payload is after it
+      const payload = data.subarray(5, Math.min(4 + length, data.length));
       return { compression, payload, raw: data };
     }
 

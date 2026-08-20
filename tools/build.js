@@ -34,6 +34,9 @@ function build() {
   cp(path.join(SRC, 'style', 'app.css'), path.join(DIST, 'style', 'app.css'));
   cp(path.join(SRC, 'NBT.js'), path.join(DIST, 'NBT.js'));
   for (const rel of SCRIPT_ORDER) cp(path.join(SRC, rel), path.join(DIST, rel));
+  cp(path.join(SRC, 'manifest.webmanifest'), path.join(DIST, 'manifest.webmanifest'));
+  cp(path.join(SRC, 'sw.js'), path.join(DIST, 'sw.js'));
+  cp(path.join(SRC, 'icon.svg'), path.join(DIST, 'icon.svg'));
 
   // 2. single-file build — inline css + all scripts into one html
   const css = fs.readFileSync(path.join(SRC, 'style', 'app.css'), 'utf8');

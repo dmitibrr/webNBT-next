@@ -52,6 +52,7 @@ window.NBT = (function (ns) {
       'toast.copied': 'Copied {0}',
       'err.parse': 'Could not parse file as NBT',
       'warn.parseIssues': 'Parse had issues ({0}) — lenient mode',
+      'warn.chunkIssues': ['Save warning: {0} issue', 'Save warning: {0} issues'],
       'toast.savedRegion': 'Saved region file',
       'toast.stagedChunk': 'Staged chunk r.{0}.{1} — save the region file to write',
       'toast.saved': 'Saved {0}',
@@ -66,6 +67,15 @@ window.NBT = (function (ns) {
       'formats.exportSNBT': 'Export as SNBT',
       'formats.exportJSON': 'Export as JSON',
       'formats.import': 'Import SNBT / JSON file…',
+      'formats.exportBase64': 'Export raw NBT as base64',
+      'formats.copyPython': 'Copy as Python (nbtlib)',
+      'formats.exportB64SNBT': 'Copy SNBT as base64',
+      'formats.recent': '▾ Recent files',
+      'formats.compare': 'Compare with another NBT file…',
+      'compare.title': 'Diff vs {0}',
+      'compare.changes': ['{0} difference', '{0} differences'],
+      'compare.identical': 'Files are identical',
+      'compare.close': 'Close diff',
       'toast.importedSNBT': 'Imported from SNBT',
       'toast.importedJSON': 'Imported from JSON',
       'err.importFailed': 'Import failed: {0}',
@@ -108,6 +118,10 @@ window.NBT = (function (ns) {
       'tree.badge.tags': ['{0} tag', '{0} tags'],
       'tree.badge.items': ['{0} item', '{0} items'],
       'lang.label': 'Language',
+      'btn.types.title': 'Toggle localized type names',
+      'type.0': 'End', 'type.1': 'Byte', 'type.2': 'Short', 'type.3': 'Int', 'type.4': 'Long',
+      'type.5': 'Float', 'type.6': 'Double', 'type.7': 'ByteArray', 'type.8': 'String',
+      'type.9': 'List', 'type.10': 'Compound', 'type.11': 'IntArray', 'type.12': 'LongArray',
     },
     es: {
       'app.title': 'webNBT · editor de NBT',
@@ -149,6 +163,7 @@ window.NBT = (function (ns) {
       'toast.copied': 'Copiado {0}',
       'err.parse': 'No se pudo analizar el archivo como NBT',
       'warn.parseIssues': 'El análisis tuvo problemas ({0}) — modo tolerante',
+      'warn.chunkIssues': ['Advertencia al guardar: {0} problema', 'Advertencia al guardar: {0} problemas'],
       'toast.savedRegion': 'Archivo de región guardado',
       'toast.stagedChunk': 'Chunk r.{0}.{1} preparado — guarda el archivo de región para escribir',
       'toast.saved': 'Guardado {0}',
@@ -163,6 +178,15 @@ window.NBT = (function (ns) {
       'formats.exportSNBT': 'Exportar como SNBT',
       'formats.exportJSON': 'Exportar como JSON',
       'formats.import': 'Importar archivo SNBT / JSON…',
+      'formats.exportBase64': 'Exportar NBT sin comprimir como base64',
+      'formats.copyPython': 'Copiar como Python (nbtlib)',
+      'formats.exportB64SNBT': 'Copiar SNBT como base64',
+      'formats.recent': '▾ Archivos recientes',
+      'formats.compare': 'Comparar con otro archivo NBT…',
+      'compare.title': 'Diferencias vs {0}',
+      'compare.changes': ['{0} diferencia', '{0} diferencias'],
+      'compare.identical': 'Los archivos son idénticos',
+      'compare.close': 'Cerrar diff',
       'toast.importedSNBT': 'Importado desde SNBT',
       'toast.importedJSON': 'Importado desde JSON',
       'err.importFailed': 'Error de importación: {0}',
@@ -205,6 +229,10 @@ window.NBT = (function (ns) {
       'tree.badge.tags': ['{0} etiqueta', '{0} etiquetas'],
       'tree.badge.items': ['{0} objeto', '{0} objetos'],
       'lang.label': 'Idioma',
+      'btn.types.title': 'Alternar nombres de tipo localizados',
+      'type.0': 'End', 'type.1': 'Byte', 'type.2': 'Short', 'type.3': 'Entero', 'type.4': 'Long',
+      'type.5': 'Flotante', 'type.6': 'Doble', 'type.7': 'Matriz de bytes', 'type.8': 'Texto',
+      'type.9': 'Lista', 'type.10': 'Compuesto', 'type.11': 'Matriz de enteros', 'type.12': 'Matriz de longs',
     },
     ru: {
       'app.title': 'webNBT · редактор NBT',
@@ -246,6 +274,7 @@ window.NBT = (function (ns) {
       'toast.copied': 'Скопировано: {0}',
       'err.parse': 'Не удалось разобрать файл как NBT',
       'warn.parseIssues': 'При разборе были проблемы ({0}) — щадящий режим',
+      'warn.chunkIssues': ['Предупреждение при сохранении: {0} проблема', 'Предупреждение при сохранении: {0} проблемы', 'Предупреждение при сохранении: {0} проблем'],
       'toast.savedRegion': 'Файл региона сохранён',
       'toast.stagedChunk': 'Чанк r.{0}.{1} готов — сохраните файл региона, чтобы записать',
       'toast.saved': 'Сохранено: {0}',
@@ -260,6 +289,15 @@ window.NBT = (function (ns) {
       'formats.exportSNBT': 'Экспорт в SNBT',
       'formats.exportJSON': 'Экспорт в JSON',
       'formats.import': 'Импорт файла SNBT / JSON…',
+      'formats.exportBase64': 'Экспорт сырого NBT в base64',
+      'formats.copyPython': 'Копировать как Python (nbtlib)',
+      'formats.exportB64SNBT': 'Копировать SNBT в base64',
+      'formats.recent': '▾ Недавние файлы',
+      'formats.compare': 'Сравнить с другим NBT-файлом…',
+      'compare.title': 'Различия с {0}',
+      'compare.changes': ['{0} различие', '{0} различия', '{0} различий'],
+      'compare.identical': 'Файлы идентичны',
+      'compare.close': 'Закрыть diff',
       'toast.importedSNBT': 'Импортировано из SNBT',
       'toast.importedJSON': 'Импортировано из JSON',
       'err.importFailed': 'Ошибка импорта: {0}',
@@ -302,6 +340,10 @@ window.NBT = (function (ns) {
       'tree.badge.tags': ['{0} тег', '{0} тега', '{0} тегов'],
       'tree.badge.items': ['{0} предмет', '{0} предмета', '{0} предметов'],
       'lang.label': 'Язык',
+      'btn.types.title': 'Локализованные названия типов',
+      'type.0': 'End', 'type.1': 'Байт', 'type.2': 'Короткое', 'type.3': 'Целое', 'type.4': 'Длинное',
+      'type.5': 'Плавающее', 'type.6': 'Двойное', 'type.7': 'Массив байт', 'type.8': 'Строка',
+      'type.9': 'Список', 'type.10': 'Составной', 'type.11': 'Массив int', 'type.12': 'Массив long',
     },
     zh: {
       'app.title': 'webNBT · NBT 编辑器',
@@ -343,6 +385,7 @@ window.NBT = (function (ns) {
       'toast.copied': '已复制 {0}',
       'err.parse': '无法将文件解析为 NBT',
       'warn.parseIssues': '解析出现问题（{0}）— 宽松模式',
+      'warn.chunkIssues': '保存警告：{0} 个问题',
       'toast.savedRegion': '已保存区域文件',
       'toast.stagedChunk': '区块 r.{0}.{1} 已暂存 — 保存区域文件以写入',
       'toast.saved': '已保存 {0}',
@@ -357,6 +400,15 @@ window.NBT = (function (ns) {
       'formats.exportSNBT': '导出为 SNBT',
       'formats.exportJSON': '导出为 JSON',
       'formats.import': '导入 SNBT / JSON 文件…',
+      'formats.exportBase64': '将原始 NBT 导出为 base64',
+      'formats.copyPython': '复制为 Python（nbtlib）',
+      'formats.exportB64SNBT': '将 SNBT 复制为 base64',
+      'formats.recent': '▾ 最近文件',
+      'formats.compare': '与另一个 NBT 文件比较…',
+      'compare.title': '与 {0} 的差异',
+      'compare.changes': '{0} 处差异',
+      'compare.identical': '文件相同',
+      'compare.close': '关闭差异',
       'toast.importedSNBT': '已从 SNBT 导入',
       'toast.importedJSON': '已从 JSON 导入',
       'err.importFailed': '导入失败：{0}',
@@ -399,6 +451,10 @@ window.NBT = (function (ns) {
       'tree.badge.tags': '{0} 个标签',
       'tree.badge.items': '{0} 个物品',
       'lang.label': '语言',
+      'btn.types.title': '切换本地化类型名称',
+      'type.0': 'End', 'type.1': '字节', 'type.2': '短整型', 'type.3': '整型', 'type.4': '长整型',
+      'type.5': '单精度浮点', 'type.6': '双精度浮点', 'type.7': '字节数组', 'type.8': '字符串',
+      'type.9': '列表', 'type.10': '复合', 'type.11': '整型数组', 'type.12': '长整型数组',
     },
     ja: {
       'app.title': 'webNBT · NBT エディタ',
@@ -440,6 +496,7 @@ window.NBT = (function (ns) {
       'toast.copied': 'コピーしました: {0}',
       'err.parse': 'ファイルを NBT として解析できませんでした',
       'warn.parseIssues': '解析に問題がありました（{0}）— 寛容モード',
+      'warn.chunkIssues': '保存時の警告：{0} 件の問題',
       'toast.savedRegion': 'リージョンファイルを保存しました',
       'toast.stagedChunk': 'チャンク r.{0}.{1} をステージング — リージョンファイルを保存して書き込み',
       'toast.saved': '保存しました: {0}',
@@ -454,6 +511,15 @@ window.NBT = (function (ns) {
       'formats.exportSNBT': 'SNBT としてエクスポート',
       'formats.exportJSON': 'JSON としてエクスポート',
       'formats.import': 'SNBT / JSON ファイルをインポート…',
+      'formats.exportBase64': '生の NBT を base64 でエクスポート',
+      'formats.copyPython': 'Python（nbtlib）としてコピー',
+      'formats.exportB64SNBT': 'SNBT を base64 としてコピー',
+      'formats.recent': '▾ 最近のファイル',
+      'formats.compare': '別の NBT ファイルと比較…',
+      'compare.title': '{0} との差分',
+      'compare.changes': '{0} 件の差分',
+      'compare.identical': 'ファイルは同一です',
+      'compare.close': '差分を閉じる',
       'toast.importedSNBT': 'SNBT からインポートしました',
       'toast.importedJSON': 'JSON からインポートしました',
       'err.importFailed': 'インポートに失敗しました: {0}',
@@ -496,12 +562,30 @@ window.NBT = (function (ns) {
       'tree.badge.tags': '{0} タグ',
       'tree.badge.items': '{0} アイテム',
       'lang.label': '言語',
+      'btn.types.title': 'ローカライズした型名に切り替え',
+      'type.0': 'End', 'type.1': 'バイト', 'type.2': 'ショート', 'type.3': '整数', 'type.4': 'ロング',
+      'type.5': 'フロート', 'type.6': 'ダブル', 'type.7': 'バイト配列', 'type.8': '文字列',
+      'type.9': 'リスト', 'type.10': 'コンパウンド', 'type.11': '整数配列', 'type.12': 'ロング配列',
     },
   };
 
   let lang = detectLang();
+  let localizeTypes = false;
+  try { localizeTypes = localStorage.getItem('webnbt-localize-types') === '1'; } catch (e) { /* ignore */ }
+
+  function setLocalizeTypes(on) {
+    localizeTypes = !!on;
+    try { localStorage.setItem('webnbt-localize-types', localizeTypes ? '1' : '0'); } catch (e) { /* ignore */ }
+    if (window.App && typeof window.App.refreshAll === 'function') {
+      try { window.App.refreshAll(); } catch (e) { /* ignore */ }
+    }
+  }
 
   function detectLang() {
+    try {
+      const urlLang = new URLSearchParams(location.search).get('lang');
+      if (LOCALES.includes(urlLang)) return urlLang;
+    } catch (e) { /* ignore */ }
     try {
       const saved = localStorage.getItem('webnbt-lang');
       if (LOCALES.includes(saved)) return saved;
@@ -599,7 +683,12 @@ window.NBT = (function (ns) {
 
   ns.t = t;
   ns.tpl = tpl;
-  ns.I18N = { t, tpl, setLang, get lang() { return lang; }, locales: LOCALES };
+  ns.I18N = {
+    t, tpl, setLang, setLocalizeTypes,
+    get lang() { return lang; },
+    get localizeTypes() { return localizeTypes; },
+    locales: LOCALES,
+  };
 
   return ns;
 })(window.NBT || {});

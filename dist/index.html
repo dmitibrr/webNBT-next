@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#16181d" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <title>webNBT · NBT editor</title>
 
   <link rel="stylesheet" href="style/app.css" />
@@ -60,6 +63,7 @@
       <button id="btn-hex" title="Toggle hex view" class="active" data-i18n="btn.hex" data-i18n-title="btn.hex.title"># Hex</button>
       <button id="btn-smart" title="Smart views for structures/inventories" class="active" data-i18n="btn.smart" data-i18n-title="btn.smart.title">✲ Smart</button>
       <button id="btn-theme" title="Toggle theme" data-i18n-title="btn.theme.title">🌓</button>
+      <button id="btn-types" title="Toggle localized type names" data-i18n-title="btn.types.title">Aa</button>
     </div>
     <div id="search-wrap">
       <select id="lang-select" aria-label="Language"></select>
@@ -69,6 +73,7 @@
 
   <main id="layout">
     <section id="tree-pane">
+      <div id="chunk-tabs" class="hidden"></div>
       <div id="tree" tabindex="0"></div>
       <div id="empty-state">
         <div class="es-big" data-i18n="empty.big">No file loaded</div>
@@ -93,5 +98,6 @@
   </footer>
 
   <input type="file" id="file-input" multiple hidden />
+  <input type="file" id="file-compare" hidden />
 </body>
 </html>

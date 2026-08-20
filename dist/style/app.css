@@ -145,9 +145,53 @@ body.no-right #right-pane { display: none; }
 #hexview .ascii { color: var(--text); }
 #hexview .hl { color: var(--accent); font-weight: 700; }
 
+/* interactive hex overlay */
+#hexview .hex-wrap { white-space: pre; }
+#hexview .hex-row { display: flex; gap: 10px; padding: 1px 4px; border-radius: 4px; cursor: pointer; }
+#hexview .hex-row:hover { background: var(--bg-hover); }
+#hexview .hex-off { color: var(--text-faint); min-width: 44px; }
+#hexview .hex-bytes, #hexview .hex-chars { display: inline-block; }
+#hexview .hex-byte { display: inline-block; width: 1.6em; }
+#hexview .hex-byte.hl { background: color-mix(in srgb, var(--accent) 28%, transparent); color: var(--text); border-radius: 2px; }
+#hexview .hex-char.hl { background: color-mix(in srgb, var(--accent) 28%, transparent); color: var(--text); border-radius: 2px; }
+
 /* ── tree ── */
 #tree { padding: 8px 6px 40px; user-select: none; outline: none; }
 #tree ul.tree { list-style: none; }
+
+/* chunk tabs + diff panel */
+#chunk-tabs { display: flex; gap: 4px; padding: 6px 8px 0; flex-wrap: wrap; }
+#chunk-tabs.hidden { display: none; }
+.chunk-tab {
+  font: inherit; font-size: 12px; color: var(--text-dim);
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 6px 6px 0 0; padding: 3px 10px; cursor: pointer;
+}
+.chunk-tab.active { color: var(--text); border-color: var(--accent); background: var(--bg-input); }
+
+.diff-panel {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 46%; max-width: 420px;
+  background: var(--bg-panel); border-left: 1px solid var(--border);
+  box-shadow: -6px 0 18px rgba(0,0,0,.25); padding: 10px; z-index: 20;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.diff-head { font-weight: 700; margin-bottom: 8px; }
+.diff-list { flex: 1; overflow: auto; }
+.diff-row {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  font: inherit; font-size: 12px; padding: 4px 6px; margin: 2px 0;
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+}
+.diff-row:hover { border-color: var(--accent); }
+.diff-badge {
+  flex: 0 0 auto; font-size: 10px; padding: 1px 6px; border-radius: 8px;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.diff-row.add .diff-badge { background: #2a5d34; color: #9be8a8; }
+.diff-row.remove .diff-badge { background: #5d2a2a; color: #ff9a9a; }
+.diff-row.change .diff-badge { background: #5d4f2a; color: #ffe08a; }
+.diff-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diff-close { margin-top: 8px; align-self: flex-end; }
 #tree ul.tree ul { list-style: none; margin-left: 18px; }
 #tree li {
   display: block;

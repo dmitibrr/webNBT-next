@@ -15,9 +15,19 @@ Edit Minecraft NBT files (level.dat, player data, schematics, structure blocks, 
 - **JSON ↔ NBT** import/export (typed round-trip: `Long`, arrays, strings stay intact).
 - **Region files (`.mca` / `.mcr`)** — read the chunk index, probe individual chunks, edit one, and repack aligned to the original 4096-byte sector layout.
 - **Smart structure views** — recognize BlockEntity / ItemStack / Inventory / StructureData blocks (legacy numeric block palette for `BlockID` → name).
+- **Interactive hex mini-map** — click any hex row to jump straight to that tag in the tree; selecting a tag highlights its exact byte range.
+- **Structured search** — plain text search, plus `/path/with/*/globs` (with `**`) and `@Type` filters.
+- **Compare two NBT files** — load a second file from the Formats menu and get a color-coded structural diff (add/remove/change) with click-to-jump.
+- **Cross-window drag & drop** — drag a tag from one tab/window and drop it into another to import it.
+- **Session restore** — your document, undo history and selection survive a reload / tab close.
+- **Chunk tabs** — every chunk opened from a region becomes a tab; switch with `Alt+1..9`.
+- **Recent files** menu (last 8, persisted) and extra exports: raw NBT as base64, Python (`nbtlib`) snippet, SNBT-as-base64.
+- **Chunk validation** — warns before saving if palette / BlockStates / entity data looks inconsistent.
+- **Installable PWA** — manifest + service worker + icon; offline-capable on HTTPS.
 - **Live hex view**, search across tags, drag & drop reordering, context menus, keyboard shortcuts (Ctrl+O/S/Z/Y, Del), undo/redo history, dark & light themes.
 - **Fully offline** — no CDN, no external requests. Works from `file://`, any static host, or as a single HTML file.
 - **5 UI languages** — English, Español, Русский, 中文, 日本語 (auto-detected from your browser; switch anytime in the top bar, persisted in `localStorage`). All five are LTR scripts, so the layout is designed **left-to-right only** — RTL (Arabic / Hebrew / Persian) is a conscious non-goal for now.
+- **Shareable URLs** — `?lang=es` pins the language and `#file=<url-or-data-uri>` opens a remote file on load.
 
 ## Releases
 

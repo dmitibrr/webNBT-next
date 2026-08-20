@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="20" fill="#16181d"/>
+  <text x="64" y="92" font-family="ui-monospace, Menlo, monospace" font-size="72" font-weight="700" text-anchor="middle" fill="#f09a73">◢</text>
+  <text x="64" y="96" font-family="ui-monospace, Menlo, monospace" font-size="36" font-weight="700" text-anchor="middle" fill="#c3d38c" dy="-40">NB</text>
+</svg>

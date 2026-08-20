@@ -25,7 +25,13 @@ window.NBT = (function (ns) {
     7: 'ByteArray', 8: 'String', 9: 'List', 10: 'Compound', 11: 'IntArray', 12: 'LongArray',
   };
 
-  function typeName(t) { return TYPE_NAMES[t] || ('Tag#' + t); }
+  function typeName(t) {
+    if (ns.I18N && ns.I18N.localizeTypes) {
+      const loc = ns.t('type.' + t);
+      if (loc && loc.indexOf('type.') !== 0) return loc;
+    }
+    return TYPE_NAMES[t] || ('Tag#' + t);
+  }
 
   const ARRAY_TYPES = { 7: true, 11: true, 12: true };
   const NUMERIC = { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true };
@@ -132,6 +138,57 @@ window.NBT = (function (ns) {
     if (isList(tag)) return tag.v.map((child, i) => ({ key: String(i), tag: child }));
     return [];
   }
+
+  // Structural diff between two models.
+  // Returns [{ path, kind: 'same'|'add'|'remove'|'change', a?, b? }].
+  // A leaf value compare is "different" when JSON differs.
+  function diff(a, b) {
+    const out = [];
+    const seen = new Set();
+
+    function leafVal(tag) {
+      if (!tag) return undefined;
+      if (tag.t === T.ByteArray) return tag.v;
+      if (tag.t === T.Long) return String(tag.v);
+      if (Array.isArray(tag.v)) return tag.v.map((x) => typeof x === 'bigint' ? String(x) : x);
+      return tag.v;
+    }
+
+    function isLeaf(tag) { return !isContainer(tag); }
+
+    function walkPair(pa, pb, path) {
+      const pk = path.join('\u001f');
+      const aLeaf = pa && isLeaf(pa), bLeaf = pb && isLeaf(pb);
+      if (aLeaf || bLeaf) {
+        const la = leafVal(pa), lb = leafVal(pb);
+        if (pa && pb && aLeaf && bLeaf) {
+          const same = JSON.stringify(la) === JSON.stringify(lb);
+          if (!same) out.push({ path: path.slice(), kind: 'change', a: pa, b: pb });
+          else out.push({ path: path.slice(), kind: 'same', a: pa, b: pb });
+        } else if (pa && !pb) out.push({ path: path.slice(), kind: 'remove', a: pa });
+        else if (!pa && pb) out.push({ path: path.slice(), kind: 'add', b: pb });
+        return;
+      }
+      // both containers (or one missing)
+      if (!pa && pb) { out.push({ path: path.slice(), kind: 'add', b: pb }); return; }
+      if (pa && !pb) { out.push({ path: path.slice(), kind: 'remove', a: pa }); return; }
+      // container type mismatch
+      if (pa.t !== pb.t) { out.push({ path: path.slice(), kind: 'change', a: pa, b: pb }); return; }
+
+      const ea = childEntries(pa), eb = childEntries(pb);
+      const keys = new Set([...ea.map((e) => e.key), ...eb.map((e) => e.key)]);
+      for (const k of keys) {
+        const ca = ea.find((e) => e.key === k);
+        const cb = eb.find((e) => e.key === k);
+        walkPair(ca && ca.tag, cb && cb.tag, path.concat([k]));
+      }
+    }
+
+    walkPair(a, b, []);
+    return out;
+  }
+
+  ns.diff = diff;
 
   ns.T = T;
   ns.typeName = typeName;

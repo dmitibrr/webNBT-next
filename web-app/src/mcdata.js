@@ -145,5 +145,69 @@ window.NBT = (function (ns) {
 
   ns.mcdata = { blockName, itemName, smartFor, itemStackInfo, looksLikeBlockEntity };
 
+  // ── chunk validation (warn, not hard-block) ────────────────────────────────
+  // Returns an array of human-readable issues for a chunk-like model.
+  function validateChunk(model) {
+    const issues = [];
+    if (!model) return issues;
+    if (isCompound(model)) {
+      const hasLevel = !!get(model, 'Level');
+      const root = hasLevel ? get(model, 'Level') : model;
+      if (isCompound(root)) {
+        const sections = get(root, 'Sections');
+        if (isList(sections)) {
+          for (let i = 0; i < sections.v.length; i++) {
+            const sec = sections.v[i];
+            if (!isCompound(sec)) continue;
+            const y = getVal(sec, 'Y');
+            const palette = get(sec, 'Palette');
+            const blocks = get(sec, 'BlockStates');
+            if (!palette && !blocks) continue;
+            const palCount = isList(palette) ? palette.v.length : 1;
+            if (isList(palette) && palette.v.length > 1) {
+              const needed = Math.ceil(4096 * Math.log2(palette.v.length) / 64);
+              const len = getVal(sec, 'BlockStates');
+              const arrLen = Array.isArray(len) ? len.length : 0;
+              if (arrLen && arrLen < needed) {
+                issues.push('Section Y=' + y + ': BlockStates has ' + arrLen + ' longs, need ≥ ' + needed + ' for ' + palette.v.length + ' palette entries');
+              }
+            }
+            if (isList(palette)) {
+              for (const p of palette.v) {
+                if (isCompound(p)) {
+                  const nm = getVal(p, 'Name');
+                  if (typeof nm === 'string' && nm.indexOf(':') < 0) issues.push('Section Y=' + y + ': palette name "' + nm + '" has no namespace');
+                }
+              }
+            }
+          }
+        }
+        const pos = get(root, 'xPos');
+        if (pos === undefined && getVal(root, 'xPos') === undefined && !hasLevel) {
+          // some modern chunks have xPos; others rely on region position
+        }
+        const biomes = get(root, 'Biomes');
+        if (isList(biomes) && biomes.v.length === 0) issues.push('Biomes list is empty');
+        const entities = get(root, 'Entities');
+        if (isList(entities)) {
+          for (let i = 0; i < entities.v.length; i++) {
+            const e = entities.v[i];
+            if (isCompound(e) && !get(e, 'id')) issues.push('Entity #' + i + ' has no "id"');
+          }
+        }
+        const tileEntities = get(root, 'TileEntities');
+        if (isList(tileEntities)) {
+          for (let i = 0; i < tileEntities.v.length; i++) {
+            const e = tileEntities.v[i];
+            if (isCompound(e) && !get(e, 'id')) issues.push('TileEntity #' + i + ' has no "id"');
+          }
+        }
+      }
+    }
+    return issues;
+  }
+
+  ns.mcdata.validateChunk = validateChunk;
+
   return ns;
 })(window.NBT || {});

@@ -129,13 +129,63 @@ window.NBT = (function (ns) {
 
   Tree.prototype.matches = function (tag, path, q) {
     if (!q) return false;
+    // structured: "/path/glob/**"  or  "@Type"
+    if (q[0] === '/') return this.matchPath(tag, path, q);
+    if (q[0] === '@') {
+      const want = q.slice(1).trim().toLowerCase();
+      return ns.typeName(tag.t).toLowerCase() === want ||
+        (String(tag.t) === want);
+    }
     const key = String(path.length ? path[path.length - 1] : (tag.n || ''));
     const text = (key + ' ' + ns.typeName(tag.t) + ' ' + valueText(tag)).toLowerCase();
-    return text.indexOf(q) !== -1;
+    return text.indexOf(q.toLowerCase()) !== -1;
   };
 
+  // Glob over path segments: '*' = one segment, '**' = any number, exact names otherwise.
+  Tree.prototype.matchPath = function (tag, path, q) {
+    let pat = q.slice(1);
+    // trailing slash means "anything below"
+    if (pat.endsWith('/')) pat += '**';
+    const parts = pat.split('/').filter((s) => s !== '');
+    if (parts.length === 0) return true;
+    const names = path.map((s) => String(s));
+    if (parts[parts.length - 1] === '**') {
+      return matchSegments(parts.slice(0, -1), names, true);
+    }
+    return matchSegments(parts, names, false);
+  };
+
+  function matchSegments(pat, names, trailingStar) {
+    const plen = pat.length, nlen = names.length;
+    // simple non-'**' case
+    if (!pat.includes('**')) {
+      if (nlen < plen) return false;
+      for (let i = 0; i < plen; i++) {
+        if (pat[i] !== '*' && pat[i] !== names[i]) return false;
+      }
+      return trailingStar ? nlen >= plen : nlen === plen;
+    }
+    // recursive glob with '**'
+    const memo = {};
+    const go = (pi, ni) => {
+      const k = pi + ':' + ni;
+      if (memo[k] !== undefined) return memo[k];
+      if (pi === plen) return trailingStar ? ni <= nlen : ni === nlen;
+      if (pat[pi] === '**') {
+        for (let skip = 0; skip <= nlen - ni; skip++) {
+          if (go(pi + 1, ni + skip)) return memo[k] = true;
+        }
+        return memo[k] = false;
+      }
+      if (ni >= nlen) return memo[k] = false;
+      const ok = pat[pi] === '*' || pat[pi] === names[ni];
+      return memo[k] = ok ? go(pi + 1, ni + 1) : false;
+    };
+    return go(0, 0);
+  }
+
   Tree.prototype.applySearch = function (q) {
-    this.query = q ? q.toLowerCase() : '';
+    this.query = q || '';
     if (!this.query) {
       this.searchResults = [];
       this.searchIdx = 0;
@@ -325,6 +375,11 @@ window.NBT = (function (ns) {
     const self = this;
     li.addEventListener('dragstart', (e) => {
       e.dataTransfer.setData('text/plain', pkey(path));
+      // cross-tab/--window payload: full tag JSON
+      try {
+        const tag = this.getAt(path);
+        e.dataTransfer.setData('application/x-webnbt-tag', JSON.stringify(tag));
+      } catch (err) { /* ignore */ }
       e.dataTransfer.effectAllowed = 'move';
       self._dragPath = path;
     });
@@ -356,7 +411,17 @@ window.NBT = (function (ns) {
       li.classList.remove('drop-top', 'drop-mid', 'drop-bottom');
       const fromPath = self._dragPath;
       self._dragPath = null;
-      if (!fromPath) return;
+      if (!fromPath) {
+        // external (cross-window) tag drop?
+        const ext = e.dataTransfer && e.dataTransfer.getData('application/x-webnbt-tag');
+        if (ext && self.opts.onExternalDrop) {
+          try {
+            const tag = JSON.parse(ext);
+            self.opts.onExternalDrop(tag, path, container);
+          } catch (err) { /* ignore */ }
+        }
+        return;
+      }
       const dest = path;
       const zone = (() => {
         const rect = node.getBoundingClientRect();

@@ -11,6 +11,7 @@
   <script src="NBT.js"></script>
 
   <!-- Core logic (order matters: model → codec → format → region → mcdata) -->
+  <script src="src/i18n.js"></script>
   <script src="src/model.js"></script>
   <script src="src/codec.js"></script>
   <script src="src/format.js"></script>
@@ -23,8 +24,8 @@
 <body>
   <div id="drop-zone">
     <div class="dz-box">
-      <div class="dz-title">Drop a file here</div>
-      <div class="dz-sub">.dat &middot; .schematic &middot; .mcmeta &middot; .mca / .mcr (region) &middot; any NBT
+      <div class="dz-title" data-i18n="drop.title">Drop a file here</div>
+      <div class="dz-sub" data-i18n="drop.sub">.dat &middot; .schematic &middot; .mcmeta &middot; .mca / .mcr (region) &middot; any NBT
         (gzip, zlib, raw deflate or uncompressed)</div>
     </div>
   </div>
@@ -32,36 +33,37 @@
   <div id="loading-shade">
     <div class="load-box">
       <div class="spinner"></div>
-      <div id="loading-text">Booting NBT codec…</div>
+      <div id="loading-text" data-i18n="loading.booting">Booting NBT codec…</div>
     </div>
   </div>
 
   <header id="topbar">
     <div id="brand" title="webNBT — NBT editor">▣ webNBT</div>
     <div id="toolbar">
-      <button id="btn-open" title="Open file (Ctrl+O)">Open</button>
-      <button id="btn-save" title="Save file (Ctrl+S)">Save</button>
-      <button id="btn-export" title="Import / export as SNBT or JSON">⇅ Formats</button>
+      <button id="btn-open" title="Open file (Ctrl+O)" data-i18n="btn.open" data-i18n-title="btn.open.title">Open</button>
+      <button id="btn-save" title="Save file (Ctrl+S)" data-i18n="btn.save" data-i18n-title="btn.save.title">Save</button>
+      <button id="btn-export" title="Import / export as SNBT or JSON" data-i18n="btn.formats" data-i18n-title="btn.formats.title">⇅ Formats</button>
 
       <span class="tb-sep"></span>
 
-      <button id="btn-undo" title="Undo (Ctrl+Z)" disabled>↶</button>
-      <button id="btn-redo" title="Redo (Ctrl+Y)" disabled>↷</button>
+      <button id="btn-undo" title="Undo (Ctrl+Z)" disabled data-i18n-title="btn.undo.title">↶</button>
+      <button id="btn-redo" title="Redo (Ctrl+Y)" disabled data-i18n-title="btn.redo.title">↷</button>
 
       <span class="tb-sep"></span>
 
-      <button id="btn-add" title="Add tag">＋</button>
-      <button id="btn-duplicate" title="Duplicate" disabled>⧉</button>
-      <button id="btn-delete" title="Delete tag (Del)" disabled>🗑</button>
+      <button id="btn-add" title="Add tag" data-i18n-title="btn.add.title">＋</button>
+      <button id="btn-duplicate" title="Duplicate" disabled data-i18n-title="btn.duplicate.title">⧉</button>
+      <button id="btn-delete" title="Delete tag (Del)" disabled data-i18n-title="btn.delete.title">🗑</button>
 
       <span class="tb-sep"></span>
 
-      <button id="btn-hex" title="Toggle hex view" class="active"># Hex</button>
-      <button id="btn-smart" title="Smart views for structures/inventories" class="active">✲ Smart</button>
-      <button id="btn-theme" title="Toggle theme">🌓</button>
+      <button id="btn-hex" title="Toggle hex view" class="active" data-i18n="btn.hex" data-i18n-title="btn.hex.title"># Hex</button>
+      <button id="btn-smart" title="Smart views for structures/inventories" class="active" data-i18n="btn.smart" data-i18n-title="btn.smart.title">✲ Smart</button>
+      <button id="btn-theme" title="Toggle theme" data-i18n-title="btn.theme.title">🌓</button>
     </div>
     <div id="search-wrap">
-      <input id="search-field" type="search" placeholder="Search tags… (Enter next)" autocomplete="off" />
+      <select id="lang-select" aria-label="Language"></select>
+      <input id="search-field" type="search" placeholder="Search tags… (Enter next)" autocomplete="off" data-i18n-placeholder="search.placeholder" />
     </div>
   </header>
 
@@ -69,14 +71,14 @@
     <section id="tree-pane">
       <div id="tree" tabindex="0"></div>
       <div id="empty-state">
-        <div class="es-big">No file loaded</div>
-        <div class="es-sub">Click <b>Open</b>, drop a file anywhere, or <button id="empty-open">browse…</button></div>
+        <div class="es-big" data-i18n="empty.big">No file loaded</div>
+        <div class="es-sub" data-i18n-html="empty.sub">Click <b>Open</b>, drop a file anywhere, or <button id="empty-open">browse…</button></div>
       </div>
     </section>
 
     <section id="right-pane">
       <div id="inspector">
-        <div class="panel-empty">Select a tag to inspect &amp; edit it.</div>
+        <div class="panel-empty" data-i18n="panel.empty">Select a tag to inspect &amp; edit it.</div>
       </div>
       <div id="hexview" class="hidden"></div>
     </section>

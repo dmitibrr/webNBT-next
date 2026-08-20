@@ -6,6 +6,7 @@
 window.NBT = (function (ns) {
   'use strict';
   const { T, isCompound, isList, childEntries } = ns;
+  const t = ns.t, tpl = ns.tpl;
 
   const SEP = '\u001f';
   function pkey(path) { return path.join(SEP); }
@@ -279,7 +280,7 @@ window.NBT = (function (ns) {
     const name = document.createElement('span');
     name.className = 'entry-name';
     if (isRoot) {
-      name.textContent = tag.n || '(unnamed)';
+      name.textContent = tag.n || t('tree.unnamed');
       if (!tag.n) name.classList.add('unnamed');
     } else {
       name.textContent = String(path[path.length - 1]);
@@ -294,7 +295,7 @@ window.NBT = (function (ns) {
     } else {
       const cntEl = document.createElement('span');
       cntEl.className = 'badge';
-      cntEl.textContent = (isCompound(tag) ? tag.v.length + ' tags' : tag.v.length + ' items');
+      cntEl.textContent = isCompound(tag) ? tpl('tree.badge.tags', tag.v.length) : tpl('tree.badge.items', tag.v.length);
       node.appendChild(cntEl);
     }
 
@@ -310,7 +311,7 @@ window.NBT = (function (ns) {
       if (entries.length === 0) {
         const empty = document.createElement('li');
         empty.className = 'leaf-empty';
-        empty.textContent = 'empty';
+        empty.textContent = t('tree.empty');
         ul.appendChild(empty);
       }
       li.appendChild(ul);

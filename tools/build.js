@@ -10,7 +10,7 @@ const SRC = path.join(ROOT, 'web-app');
 const DIST = process.argv[2] || path.join(ROOT, 'dist');
 
 const SCRIPT_ORDER = [
-  'src/model.js', 'src/codec.js', 'src/format.js', 'src/region.js', 'src/mcdata.js',
+  'src/i18n.js', 'src/model.js', 'src/codec.js', 'src/format.js', 'src/region.js', 'src/mcdata.js',
   'src/treeview.js', 'src/inspector.js', 'src/app.js',
 ];
 
@@ -44,6 +44,7 @@ function build() {
     .replace(/<link rel="stylesheet" href="style\/app\.css" \/>/,
       '<style>\n' + css + '\n</style>')
     .replace(/<script src="NBT\.js"><\/script>/, '')
+    .replace(/<script src="src\/i18n\.js"><\/script>/, '')
     .replace('<script src="src/model.js"></script>', '<script>\n' + nbtjs + '\n</script>\n  <script>\n' + inlinedScripts() + '\n</script>');
 
   fs.writeFileSync(path.join(DIST, 'webnbt.html'), html);

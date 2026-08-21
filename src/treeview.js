@@ -19,10 +19,19 @@ window.NBT = (function (ns) {
     10: { c: '#f09a73', g: '{}' }, 11: { c: '#d4a7d5', g: '[I]' }, 12: { c: '#d4a7d5', g: '[L]' },
   };
 
+  // Lucide-style SVG icon per NBT tag type.
+  const TYPE_ICON = {
+    1: 'hash', 2: 'hash', 3: 'hash', 4: 'hash',
+    5: 'divide', 6: 'divide',
+    7: 'brackets', 11: 'brackets', 12: 'brackets',
+    8: 'type', 9: 'list', 10: 'braces',
+  };
+
   function iconSvg(t) {
     const a = ICON_ATTR[t];
-    if (!a) return '<span class="icon" style="color:var(--text-faint)">?</span>';
-    return '<span class="icon" style="color:' + a.c + ';font-family:ui-monospace,monospace">' + a.g + '</span>';
+    const name = TYPE_ICON[t];
+    if (!name || !a) return '<span class="icon" style="color:var(--text-faint)">?</span>';
+    return '<span class="icon" style="color:' + a.c + '">' + ns.svgIcon(name, 13) + '</span>';
   }
 
   function valueText(tag) {

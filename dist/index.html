@@ -15,6 +15,7 @@
 
   <!-- Core logic (order matters: model → codec → format → region → mcdata) -->
   <script src="src/i18n.js"></script>
+  <script src="src/icons.js"></script>
   <script src="src/model.js"></script>
   <script src="src/codec.js"></script>
   <script src="src/format.js"></script>
@@ -43,35 +44,35 @@
   <header id="topbar">
     <div id="brand" title="webNBT — NBT editor">▣ webNBT</div>
     <div id="toolbar">
-      <button id="btn-open" title="Open file (Ctrl+O)" data-i18n="btn.open" data-i18n-title="btn.open.title">Open</button>
-      <button id="btn-save" title="Save file (Ctrl+S)" data-i18n="btn.save" data-i18n-title="btn.save.title">Save</button>
-      <button id="btn-export" title="Import / export as SNBT or JSON" data-i18n="btn.formats" data-i18n-title="btn.formats.title">⇅ Formats</button>
+      <button id="btn-open" data-icon="folder-open" title="Open file (Ctrl+O)" data-i18n-title="btn.open.title"><span data-i18n="btn.open">Open</span></button>
+      <button id="btn-save" data-icon="save" title="Save file (Ctrl+S)" data-i18n-title="btn.save.title"><span data-i18n="btn.save">Save</span></button>
+      <button id="btn-export" data-icon="arrow-down-up" title="Import / export as SNBT or JSON" data-i18n-title="btn.formats.title"><span data-i18n="btn.formats">⇅ Formats</span></button>
 
       <span class="tb-sep"></span>
 
-      <button id="btn-undo" title="Undo (Ctrl+Z)" disabled data-i18n-title="btn.undo.title">↶</button>
-      <button id="btn-redo" title="Redo (Ctrl+Y)" disabled data-i18n-title="btn.redo.title">↷</button>
-      <button id="btn-history" title="Undo history" data-i18n-title="btn.history.title">🕘</button>
+      <button id="btn-undo" data-icon="undo-2" title="Undo (Ctrl+Z)" disabled data-i18n-title="btn.undo.title"></button>
+      <button id="btn-redo" data-icon="redo-2" title="Redo (Ctrl+Y)" disabled data-i18n-title="btn.redo.title"></button>
+      <button id="btn-history" data-icon="history" title="Undo history" data-i18n-title="btn.history.title"></button>
 
       <span class="tb-sep"></span>
 
-      <button id="btn-add" title="Add tag" data-i18n-title="btn.add.title">＋</button>
-      <button id="btn-duplicate" title="Duplicate" disabled data-i18n-title="btn.duplicate.title">⧉</button>
-      <button id="btn-delete" title="Delete tag (Del)" disabled data-i18n-title="btn.delete.title">🗑</button>
+      <button id="btn-add" data-icon="plus" title="Add tag" data-i18n-title="btn.add.title"></button>
+      <button id="btn-duplicate" data-icon="copy" title="Duplicate" disabled data-i18n-title="btn.duplicate.title"></button>
+      <button id="btn-delete" data-icon="trash-2" title="Delete tag (Del)" disabled data-i18n-title="btn.delete.title"></button>
 
       <span class="tb-sep"></span>
 
-      <button id="btn-hex" title="Toggle hex view" class="active" data-i18n="btn.hex" data-i18n-title="btn.hex.title"># Hex</button>
-      <button id="btn-smart" title="Smart views for structures/inventories" class="active" data-i18n="btn.smart" data-i18n-title="btn.smart.title">✲ Smart</button>
-      <button id="btn-theme" title="Toggle theme" data-i18n-title="btn.theme.title">🌓</button>
-      <button id="btn-types" title="Toggle localized type names" data-i18n-title="btn.types.title">Aa</button>
-      <button id="btn-bookmarks" title="Bookmarks" data-i18n-title="btn.bookmarks.title">★</button>
-      <button id="btn-goto" title="Go to path (Ctrl+P)" data-i18n-title="btn.goto.title">⌕</button>
+      <button id="btn-hex" data-icon="binary" title="Toggle hex view" class="active" data-i18n-title="btn.hex.title"><span data-i18n="btn.hex"># Hex</span></button>
+      <button id="btn-smart" data-icon="sparkles" title="Smart views for structures/inventories" class="active" data-i18n-title="btn.smart.title"><span data-i18n="btn.smart">✲ Smart</span></button>
+      <button id="btn-theme" data-icon="moon" title="Toggle theme" data-i18n-title="btn.theme.title"></button>
+      <button id="btn-types" data-icon="languages" title="Toggle localized type names" data-i18n-title="btn.types.title"></button>
+      <button id="btn-bookmarks" data-icon="bookmark" title="Bookmarks" data-i18n-title="btn.bookmarks.title"></button>
+      <button id="btn-goto" data-icon="search" title="Go to path (Ctrl+P)" data-i18n-title="btn.goto.title">⌕</button>
 
       <span class="tb-sep"></span>
 
-      <button id="btn-collapse" title="Collapse all (Ctrl+[)" data-i18n-title="btn.collapse.title">–</button>
-      <button id="btn-expand" title="Expand all (Ctrl+])" data-i18n-title="btn.expand.title">+</button>
+      <button id="btn-collapse" data-icon="chevrons-down-up" title="Collapse all (Ctrl+[)" data-i18n-title="btn.collapse.title"></button>
+      <button id="btn-expand" data-icon="chevrons-up-down" title="Expand all (Ctrl+])" data-i18n-title="btn.expand.title"></button>
     </div>
     <div id="search-wrap">
       <select id="lang-select" aria-label="Language"></select>

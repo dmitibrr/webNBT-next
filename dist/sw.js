@@ -1,5 +1,5 @@
 /* webNBT service worker — offline-first cache of the app shell. */
-const CACHE = 'webnbt-v1';
+const CACHE = 'webnbt-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   './manifest.webmanifest',
   './icon.svg',
   './src/i18n.js',
+  './src/icons.js',
   './src/model.js',
   './src/codec.js',
   './src/format.js',

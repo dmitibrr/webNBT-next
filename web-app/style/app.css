@@ -129,6 +129,9 @@ button {
   cursor: pointer;
   white-space: nowrap;
 }
+#toolbar button { display: inline-flex; align-items: center; gap: 5px; }
+.icon-svg { flex: 0 0 auto; display: block; }
+.icon .icon-svg { display: block; margin: 1px 0; }
 button:hover:not(:disabled) { background: var(--bg-hover); }
 button:active:not(:disabled) { background: var(--bg-active); }
 button:disabled { opacity: .4; cursor: default; }

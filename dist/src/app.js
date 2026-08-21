@@ -1263,40 +1263,40 @@ window.App = (function (ns) {
       if (tag && A.selectedPath) duplicateTag(tag, A.selectedPath);
     };
     $('#btn-history').onclick = (e) => {
-      const r = e.target.getBoundingClientRect();
+      const r = e.currentTarget.getBoundingClientRect();
       showHistoryMenu(r.left, r.bottom);
     };
     $('#btn-add').onclick = () => { const p = A.selectedPath || []; addTag(p); };
     $('#btn-hex').onclick = (e) => {
       A.hexOn = !A.hexOn;
-      e.target.classList.toggle('active', A.hexOn);
+      e.currentTarget.classList.toggle('active', A.hexOn);
       refs.hex.classList.toggle('hidden', !A.hexOn);
       if (A.hexOn) updateHex();
       document.body.classList.toggle('no-right-inset', !A.hexOn);
     };
     $('#btn-smart').onclick = (e) => {
       A.smartOn = !A.smartOn;
-      e.target.classList.toggle('active', A.smartOn);
+      e.currentTarget.classList.toggle('active', A.smartOn);
       renderInspector();
     };
     $('#btn-theme').onclick = (e) => {
-      const r = e.target.getBoundingClientRect();
+      const r = e.currentTarget.getBoundingClientRect();
       showThemeMenu(r.left, r.bottom);
     };
     $('#btn-types').onclick = (e) => {
       const on = !ns.I18N.localizeTypes;
       ns.I18N.setLocalizeTypes(on);
-      e.target.classList.toggle('active', on);
+      e.currentTarget.classList.toggle('active', on);
     };
     $('#btn-export').onclick = (e) => {
-      const r = e.target.getBoundingClientRect();
+      const r = e.currentTarget.getBoundingClientRect();
       showFormatsMenu(r.left, r.bottom);
     };
     $('#btn-collapse').onclick = collapseAll;
     $('#btn-expand').onclick = expandAll;
     $('#btn-goto').onclick = goToPath;
     $('#btn-bookmarks').onclick = (e) => {
-      const r = e.target.getBoundingClientRect();
+      const r = e.currentTarget.getBoundingClientRect();
       showBookmarksMenu(r.left, r.bottom);
     };
 

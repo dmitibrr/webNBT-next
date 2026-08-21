@@ -10,7 +10,7 @@ const SRC = path.join(ROOT, 'web-app');
 const DIST = process.argv[2] || path.join(ROOT, 'dist');
 
 const SCRIPT_ORDER = [
-  'src/i18n.js', 'src/model.js', 'src/codec.js', 'src/format.js', 'src/region.js', 'src/mcdata.js',
+  'src/i18n.js', 'src/icons.js', 'src/model.js', 'src/codec.js', 'src/format.js', 'src/region.js', 'src/mcdata.js',
   'src/treeview.js', 'src/inspector.js', 'src/app.js',
 ];
 
